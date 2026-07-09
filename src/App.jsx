@@ -8,10 +8,23 @@ import useAuthStore from "./store/authStore";
 // Small, non-blocking indicator. Only reacts to "backendUnreachable"
 // (an info flag) — never blocks any route/page. Just a small pill in
 // the bottom-right corner while the backend is unreachable.
+//
+// ✅ FIX — pehle ye sirf backendUnreachable dekh kar dikh jaata tha,
+// chahe user logged in ho ya logged out. Ab isAuthenticated bhi check
+// karte hain — logged-out user ko "Reconnecting to server..." dikhane
+// ka koi matlab nahi, kyunki uske liye koi authenticated session hi
+// nahi hai jo reconnect ho raha ho.
 function BackendReconnectingBanner() {
     const backendUnreachable = useAuthStore((state) => state.backendUnreachable);
 
-    if (!backendUnreachable) return null;
+    // NOTE: agar tumhare authStore mein login-status ka field naam
+    // "isAuthenticated" nahi balki kuch aur hai (jaise "user" object,
+    // "token", "isLoggedIn" wagera), to yahan wahi field use karo.
+    const isAuthenticated = useAuthStore(
+        (state) => state.isAuthenticated ?? Boolean(state.user)
+    );
+
+    if (!backendUnreachable || !isAuthenticated) return null;
 
     return (
         <div
@@ -44,8 +57,8 @@ function App() {
     return (
         <BrowserRouter>
             <Toaster position="top-right" />
-            {/* Small, non-blocking indicator in the corner — never sits
-                on top of a page or blocks a route */}
+            {/* Small, non-blocking indicator in the corner — only shows
+                when logged in AND backend is unreachable */}
             <BackendReconnectingBanner />
             <AppRoutes />
         </BrowserRouter>
