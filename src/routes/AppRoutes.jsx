@@ -1,94 +1,156 @@
-﻿import { Routes, Route } from "react-router-dom";
+﻿// src/routes/AppRoutes.jsx
+
+import { Routes, Route } from "react-router-dom";
+
+// ================= PUBLIC PAGES =================
 import HomePage from "../pages/Home/HomePage";
 import LoginPage from "../pages/Login/LoginPage";
 import RegisterPage from "../pages/Register/RegisterPage";
+
+// ================= EMAIL VERIFICATION PAGES =================
 import VerificationPendingPage from "../pages/Verification/VerificationPendingPage";
 import VerifyEmailPage from "../pages/Verification/VerifyEmailPage";
 import VerificationSuccessPage from "../pages/Verification/VerificationSuccessPage";
 import VerificationFailedPage from "../pages/Verification/VerificationFailedPage";
+
+// ================= PASSWORD RESET PAGES =================
 import ForgotPasswordPage from "../pages/Auth/ForgotPasswordPage";
 import VerifyResetOtpPage from "../pages/Auth/VerifyResetOtpPage";
 import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
+
+// ================= USER/DASHBOARD PAGES =================
+// ✅ IMPORTANT:
+// Cloudflare/Linux case-sensitive hota hai.
+// Actual file path hai: src/pages/chat/ChatPage.jsx
+// Isliye "chat" lowercase rakha hai.
 import ChatPage from "../pages/chat/ChatPage";
+
 import ProfilePage from "../pages/Profile/ProfilePage";
 import DashboardPage from "../pages/Dashboard/DashboardPage";
 import ImageGeneratorPage from "../pages/ImageGeneratorPage";
-import TermsAndConditions from "../shared/Termsandconditions";
-import PaymentPolicy from "../shared/Paymentpolicy";
+
+// ✅ IMPORTANT:
+// Actual file path hai: src/pages/Wallet/walletPage.jsx
+// Isliye file name "walletPage" lowercase w ke saath rakha hai.
+import WalletPage from "../pages/Wallet/walletPage";
+
+// ================= PAYMENT RESULT PAGES =================
+import PaymentSuccessPage from "../pages/Payment/PaymentSuccessPage";
+import PaymentFailedPage from "../pages/Payment/PaymentFailedPage";
+
+// ================= LAYOUTS / ROUTE GUARDS =================
 import ProtectedRoute from "./ProtectedRoute";
 import DashboardLayout from "../layouts/DashboardLayout";
 import PublicLayout from "../shared/PublicLayout";
 
-//for documentation pages for user and developer
+// ================= DOCUMENTATION PAGES =================
 import UserDocumentation from "../document/UserDocumentation";
 import DeveloperDocumentation from "../document/DeveloperDocumentation";
 
-// ✅ WALLET PAGE — balance, usage bar, recharge button (RechargeModal
-// khud iske andar import hota hai from components/common/recharge/),
-// aur transaction history. Sidebar ke "Wallet" nav item se yahi khulta hai.
-import WalletPage from "../pages/Wallet/walletPage";
-
-// ✅ PAYMENT RESULT PAGES — Razorpay checkout complete hone ke baad
-// paymentService.js ka startCheckout() promise resolve/reject hota hai,
-// WalletPage usi ke hisaab se in dono routes pe navigate karta hai
-// (saath mein orderId/paymentId ya failure reason location.state mein).
-import PaymentSuccessPage from "../pages/Payment/PaymentSuccessPage";
-import PaymentFailedPage from "../pages/Payment/PaymentFailedPage";
+// ================= LEGAL PAGES =================
+import TermsAndConditions from "../shared/Termsandconditions";
+import PaymentPolicy from "../shared/Paymentpolicy";
 
 export default function AppRoutes() {
-  return <Routes>
+  return (
+    <Routes>
+      {/* ================================================================
+          PUBLIC ROUTES
+          Login/auth ke bina accessible pages
+          ================================================================ */}
+      <Route element={<PublicLayout />}>
+        <Route path="/" element={<HomePage />} />
 
-    {/* ================================================================
-        PUBLIC ROUTES — login/auth ke bina accessible
-        ================================================================ */}
-    <Route element={<PublicLayout />}>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route path="/verification-pending" element={<VerificationPendingPage />} />
-      <Route path="/verify-email" element={<VerifyEmailPage />} />
-      <Route path="/verification-success" element={<VerificationSuccessPage />} />
-      <Route path="/verification-failed" element={<VerificationFailedPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/verify-reset-otp" element={<VerifyResetOtpPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-    </Route>
+        {/* Auth pages */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
 
-    {/* ================================================================
-        PROTECTED ROUTES — sirf logged-in user access kar sakta hai
-        (ProtectedRoute wrapper + DashboardLayout sidebar/topbar deta hai)
-        ================================================================ */}
-    <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-      <Route path="/dashboard" element={<DashboardPage />} />
-      <Route path="/chat" element={<ChatPage />} />
-      <Route path="/chat/:id" element={<ChatPage />} />
-      <Route path="/image-generator" element={<ImageGeneratorPage />} />
-      <Route path="/profile" element={<ProfilePage />} />
+        {/* Email verification pages */}
+        <Route
+          path="/verification-pending"
+          element={<VerificationPendingPage />}
+        />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route
+          path="/verification-success"
+          element={<VerificationSuccessPage />}
+        />
+        <Route
+          path="/verification-failed"
+          element={<VerificationFailedPage />}
+        />
 
-      {/* ✅ WALLET — placeholder <h1> hata ke real WalletPage laga diya */}
-      <Route path="/wallet" element={<WalletPage />} />
-
-      {/* ✅ PAYMENT RESULT PAGES — checkout ke baad redirect yahin hota hai */}
-      <Route path="/payment/success" element={<PaymentSuccessPage />} />
-      <Route path="/payment/failed" element={<PaymentFailedPage />} />
+        {/* Forgot/reset password pages */}
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/verify-reset-otp" element={<VerifyResetOtpPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+      </Route>
 
       {/* ================================================================
-          ABHI TAK PLACEHOLDER HAIN — baad mein real pages banayenge
+          PROTECTED ROUTES
+          Sirf logged-in user access kar sakta hai.
+          ProtectedRoute auth check karega.
+          DashboardLayout sidebar/topbar provide karega.
           ================================================================ */}
-      <Route path="/settings" element={<h1 className="p-10 text-white">Settings</h1>} />
-      <Route path="/history" element={<h1 className="p-10 text-white">History</h1>} />
-      <Route path="/bookmarks" element={<h1 className="p-10 text-white">Bookmarks</h1>} />
-      <Route path="/pdf-ai" element={<h1 className="p-10 text-white">PDF AI</h1>} />
-    </Route>
+      <Route
+        element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/dashboard" element={<DashboardPage />} />
 
-    {/* ================================================================
-        DOCUMENTATION PAGES — user aur developer docs ke liye
-        ================================================================ */}
-    <Route path="/docs/user" element={<UserDocumentation />} />
-    <Route path="/docs/developer" element={<DeveloperDocumentation />} />
+        {/* Chat routes */}
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/chat/:id" element={<ChatPage />} />
 
-{/*terms and condition and payment policy */}
-    <Route path="/terms" element={<TermsAndConditions />} />
-<Route path="/payment-policy" element={<PaymentPolicy />} />
-  </Routes>;
+        {/* AI feature pages */}
+        <Route path="/image-generator" element={<ImageGeneratorPage />} />
+
+        {/* User profile */}
+        <Route path="/profile" element={<ProfilePage />} />
+
+        {/* Wallet + payment */}
+        <Route path="/wallet" element={<WalletPage />} />
+        <Route path="/payment/success" element={<PaymentSuccessPage />} />
+        <Route path="/payment/failed" element={<PaymentFailedPage />} />
+
+        {/* ================================================================
+            PLACEHOLDER ROUTES
+            Baad mein real pages bana denge.
+            ================================================================ */}
+        <Route
+          path="/settings"
+          element={<h1 className="p-10 text-white">Settings</h1>}
+        />
+        <Route
+          path="/history"
+          element={<h1 className="p-10 text-white">History</h1>}
+        />
+        <Route
+          path="/bookmarks"
+          element={<h1 className="p-10 text-white">Bookmarks</h1>}
+        />
+        <Route
+          path="/pdf-ai"
+          element={<h1 className="p-10 text-white">PDF AI</h1>}
+        />
+      </Route>
+
+      {/* ================================================================
+          DOCUMENTATION ROUTES
+          User aur developer documentation pages
+          ================================================================ */}
+      <Route path="/docs/user" element={<UserDocumentation />} />
+      <Route path="/docs/developer" element={<DeveloperDocumentation />} />
+
+      {/* ================================================================
+          LEGAL ROUTES
+          Terms and payment policy pages
+          ================================================================ */}
+      <Route path="/terms" element={<TermsAndConditions />} />
+      <Route path="/payment-policy" element={<PaymentPolicy />} />
+    </Routes>
+  );
 }
