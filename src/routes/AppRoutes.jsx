@@ -9,10 +9,12 @@ import VerificationFailedPage from "../pages/Verification/VerificationFailedPage
 import ForgotPasswordPage from "../pages/Auth/ForgotPasswordPage";
 import VerifyResetOtpPage from "../pages/Auth/VerifyResetOtpPage";
 import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
-import ChatPage from "../pages/Chat/ChatPage";
+import ChatPage from "../pages/chat/ChatPage";
 import ProfilePage from "../pages/Profile/ProfilePage";
 import DashboardPage from "../pages/Dashboard/DashboardPage";
 import ImageGeneratorPage from "../pages/ImageGeneratorPage";
+import TermsAndConditions from "../shared/Termsandconditions";
+import PaymentPolicy from "../shared/Paymentpolicy";
 import ProtectedRoute from "./ProtectedRoute";
 import DashboardLayout from "../layouts/DashboardLayout";
 import PublicLayout from "../shared/PublicLayout";
@@ -24,7 +26,7 @@ import DeveloperDocumentation from "../document/DeveloperDocumentation";
 // ✅ WALLET PAGE — balance, usage bar, recharge button (RechargeModal
 // khud iske andar import hota hai from components/common/recharge/),
 // aur transaction history. Sidebar ke "Wallet" nav item se yahi khulta hai.
-import WalletPage from "../pages/Wallet/WalletPage";
+import WalletPage from "../pages/Wallet/walletPage";
 
 // ✅ PAYMENT RESULT PAGES — Razorpay checkout complete hone ke baad
 // paymentService.js ka startCheckout() promise resolve/reject hota hai,
@@ -84,5 +86,9 @@ export default function AppRoutes() {
         ================================================================ */}
     <Route path="/docs/user" element={<UserDocumentation />} />
     <Route path="/docs/developer" element={<DeveloperDocumentation />} />
+
+{/*terms and condition and payment policy */}
+    <Route path="/terms" element={<TermsAndConditions />} />
+<Route path="/payment-policy" element={<PaymentPolicy />} />
   </Routes>;
 }
