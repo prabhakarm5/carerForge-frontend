@@ -1,89 +1,110 @@
 // worker.js
 
+const FALLBACK_BACKEND_ORIGIN =
+  "http://careerforge-ai-env.eba-mp5s8gpr.ap-south-1.elasticbeanstalk.com";
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // =====================================================
-    // API PROXY
-    // Frontend call:
-    // https://carerforge-frontend.prabhakarm7255.workers.dev/api/auth/login
-    //
-    // Backend forward:
-    // http://careerforge-ai-env.eba-mp5s8gpr.ap-south-1.elasticbeanstalk.com/api/auth/login
-    // =====================================================
+    // ✅ Debug endpoint
+    // Open this in browser:
+    // https://carerforge-frontend.prabhakarm7255.workers.dev/api/__proxy-health
+    if (url.pathname === "/api/__proxy-health") {
+      return handleProxyHealth(env);
+    }
+
+    // ✅ API proxy
     if (url.pathname.startsWith("/api/")) {
       return proxyToBackend(request, env, url);
     }
 
-    // =====================================================
-    // STATIC FRONTEND ASSETS
-    // Agar /api nahi hai, to React/Vite static app serve karo.
-    // =====================================================
+    // ✅ React/Vite static app
     return env.ASSETS.fetch(request);
   },
 };
 
-async function proxyToBackend(request, env, incomingUrl) {
-  const backendOrigin = env.BACKEND_ORIGIN;
+async function handleProxyHealth(env) {
+  const backendOrigin =
+    env.BACKEND_ORIGIN || FALLBACK_BACKEND_ORIGIN;
 
-  if (!backendOrigin) {
-    return new Response("BACKEND_ORIGIN missing in Cloudflare environment", {
-      status: 500,
-    });
-  }
-
-  const backendBase = backendOrigin.replace(/\/+$/, "");
-
-  const backendUrl = new URL(
-    incomingUrl.pathname + incomingUrl.search,
-    backendBase
+  return jsonResponse(
+    {
+      ok: true,
+      source: "cloudflare-worker",
+      backendOrigin,
+      message: "Cloudflare API proxy is active",
+    },
+    200
   );
+}
 
-  // OPTIONS preflight ko safe response
-  if (request.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: getCorsHeaders(incomingUrl.origin),
+async function proxyToBackend(request, env, incomingUrl) {
+  const backendOrigin =
+    env.BACKEND_ORIGIN || FALLBACK_BACKEND_ORIGIN;
+
+  try {
+    const backendBase = backendOrigin.replace(/\/+$/, "");
+
+    const backendUrl = new URL(
+      incomingUrl.pathname + incomingUrl.search,
+      backendBase
+    );
+
+    // ✅ OPTIONS preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: getCorsHeaders(incomingUrl.origin),
+      });
+    }
+
+    const headers = new Headers(request.headers);
+
+    // ✅ Important: backend ko Cloudflare/frontend origin forward mat karo
+    // warna Spring CORS filter confuse/block kar sakta hai.
+    headers.delete("host");
+    headers.delete("origin");
+    headers.delete("referer");
+
+    headers.set("x-forwarded-proto", "https");
+    headers.set("x-forwarded-host", incomingUrl.host);
+
+    const init = {
+      method: request.method,
+      headers,
+      redirect: "manual",
+    };
+
+    if (!["GET", "HEAD"].includes(request.method)) {
+      init.body = await request.arrayBuffer();
+    }
+
+    const backendResponse = await fetch(backendUrl.toString(), init);
+
+    const responseHeaders = new Headers(backendResponse.headers);
+
+    const corsHeaders = getCorsHeaders(incomingUrl.origin);
+    for (const [key, value] of corsHeaders.entries()) {
+      responseHeaders.set(key, value);
+    }
+
+    return new Response(backendResponse.body, {
+      status: backendResponse.status,
+      statusText: backendResponse.statusText,
+      headers: responseHeaders,
     });
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        source: "cloudflare-worker",
+        message: "Proxy failed before reaching backend or while forwarding request",
+        error: String(error?.message || error),
+      },
+      500
+    );
   }
-
-  const headers = new Headers(request.headers);
-
-  // Cloudflare/Browser specific host header backend ko mat bhejo
-  headers.delete("host");
-
-  // Backend ko batane ke liye ki original request HTTPS se aayi thi
-  headers.set("x-forwarded-proto", "https");
-  headers.set("x-forwarded-host", incomingUrl.host);
-  headers.set("x-forwarded-origin", incomingUrl.origin);
-
-  const init = {
-    method: request.method,
-    headers,
-    redirect: "manual",
-  };
-
-  // GET/HEAD request mein body allowed nahi hoti
-  if (!["GET", "HEAD"].includes(request.method)) {
-    init.body = request.body;
-  }
-
-  const backendResponse = await fetch(backendUrl.toString(), init);
-
-  const responseHeaders = new Headers(backendResponse.headers);
-
-  // Same-origin proxy hai, phir bhi safe headers rakh rahe hain
-  const corsHeaders = getCorsHeaders(incomingUrl.origin);
-  for (const [key, value] of corsHeaders.entries()) {
-    responseHeaders.set(key, value);
-  }
-
-  return new Response(backendResponse.body, {
-    status: backendResponse.status,
-    statusText: backendResponse.statusText,
-    headers: responseHeaders,
-  });
 }
 
 function getCorsHeaders(origin) {
@@ -93,5 +114,15 @@ function getCorsHeaders(origin) {
     "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "access-control-allow-headers":
       "Authorization,Content-Type,Accept,Origin,X-Requested-With",
+  });
+}
+
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: {
+      "content-type": "application/json",
+      "cache-control": "no-store",
+    },
   });
 }
