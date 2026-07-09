@@ -7,11 +7,9 @@ import {
   Braces,
   Brain,
   ChevronDown,
-  Coins,
   Cpu,
   Eye,
   Image,
-  LayoutDashboard,
   Loader2,
   MessageSquareText,
   PlayCircle,
@@ -162,8 +160,19 @@ function PlansSection() {
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
 
-    getPlans()
+    // ✅ FIX — pehle getPlans() ka koi timeout nahi tha. Agar backend
+    // slow/unreachable hota to request kabhi resolve/reject nahi hoti
+    // thi, isliye "loading" hamesha true reh jaata tha aur poora page
+    // "fas" gaya jaisa lagta (infinite spinner, koi fallback nahi).
+    //
+    // Ab 6 second ka hard timeout hai — usme response na aaye to
+    // request abort ho jaati hai aur fallback plans turant dikha diye
+    // jaate hain, page kabhi atakta nahi.
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    getPlans({ signal: controller.signal })
       .then((data) => {
         if (!active) return;
         const list = Array.isArray(data) ? data.filter((plan) => plan.active !== false) : [];
@@ -174,10 +183,15 @@ function PlansSection() {
         setErrored(true);
         setPlans(fallbackPlans);
       })
-      .finally(() => active && setLoading(false));
+      .finally(() => {
+        clearTimeout(timeoutId);
+        if (active) setLoading(false);
+      });
 
     return () => {
       active = false;
+      controller.abort();
+      clearTimeout(timeoutId);
     };
   }, []);
 
