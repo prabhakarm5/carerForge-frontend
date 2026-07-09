@@ -16,12 +16,6 @@ node_modules/
 .pnp
 .pnp.js
 
-# =========================
-# Build output
-# =========================
-dist/
-dist-ssr/
-build/
 
 # =========================
 # Environment files
@@ -87,3 +81,12 @@ coverage/
 .npm/
 .yarn/
 .pnpm-store/
+
+# =========================
+# Build output
+# =========================
+dist/
+dist-ssr/
+build/
+build*/
+build-*/
