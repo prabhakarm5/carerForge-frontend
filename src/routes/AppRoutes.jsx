@@ -18,27 +18,24 @@ import ForgotPasswordPage from "../pages/Auth/ForgotPasswordPage";
 import VerifyResetOtpPage from "../pages/Auth/VerifyResetOtpPage";
 import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
 
-// ================= USER/DASHBOARD PAGES =================
-// ✅ IMPORTANT:
-// Cloudflare/Linux case-sensitive hota hai.
-// Actual file path hai: src/pages/chat/ChatPage.jsx
-// Isliye "chat" lowercase rakha hai.
+// ================= DASHBOARD / USER PAGES =================
+// ✅ Actual path: src/pages/chat/ChatPage.jsx
+// Cloudflare/Linux case-sensitive hai, isliye "chat" lowercase rakha hai.
 import ChatPage from "../pages/chat/ChatPage";
 
 import ProfilePage from "../pages/Profile/ProfilePage";
 import DashboardPage from "../pages/Dashboard/DashboardPage";
 import ImageGeneratorPage from "../pages/ImageGeneratorPage";
 
-// ✅ IMPORTANT:
-// Actual file path hai: src/pages/Wallet/walletPage.jsx
-// Isliye file name "walletPage" lowercase w ke saath rakha hai.
+// ✅ Actual path: src/pages/Wallet/walletPage.jsx
+// Isliye "walletPage" lowercase w ke saath rakha hai.
 import WalletPage from "../pages/Wallet/walletPage";
 
-// ================= PAYMENT RESULT PAGES =================
+// ================= PAYMENT PAGES =================
 import PaymentSuccessPage from "../pages/Payment/PaymentSuccessPage";
 import PaymentFailedPage from "../pages/Payment/PaymentFailedPage";
 
-// ================= LAYOUTS / ROUTE GUARDS =================
+// ================= LAYOUTS / ROUTE GUARD =================
 import ProtectedRoute from "./ProtectedRoute";
 import DashboardLayout from "../layouts/DashboardLayout";
 import PublicLayout from "../shared/PublicLayout";
@@ -80,7 +77,7 @@ export default function AppRoutes() {
           element={<VerificationFailedPage />}
         />
 
-        {/* Forgot/reset password pages */}
+        {/* Forgot / reset password pages */}
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/verify-reset-otp" element={<VerifyResetOtpPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -99,27 +96,27 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       >
+        {/* Main dashboard */}
         <Route path="/dashboard" element={<DashboardPage />} />
 
-        {/* Chat routes */}
+        {/* Chat */}
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/chat/:id" element={<ChatPage />} />
 
-        {/* AI feature pages */}
+        {/* AI image generator */}
         <Route path="/image-generator" element={<ImageGeneratorPage />} />
 
-        {/* User profile */}
+        {/* Profile */}
         <Route path="/profile" element={<ProfilePage />} />
 
-        {/* Wallet + payment */}
+        {/* Wallet */}
         <Route path="/wallet" element={<WalletPage />} />
+
+        {/* Payment result pages */}
         <Route path="/payment/success" element={<PaymentSuccessPage />} />
         <Route path="/payment/failed" element={<PaymentFailedPage />} />
 
-        {/* ================================================================
-            PLACEHOLDER ROUTES
-            Baad mein real pages bana denge.
-            ================================================================ */}
+        {/* Placeholder pages — baad mein real pages bana denge */}
         <Route
           path="/settings"
           element={<h1 className="p-10 text-white">Settings</h1>}
@@ -140,14 +137,12 @@ export default function AppRoutes() {
 
       {/* ================================================================
           DOCUMENTATION ROUTES
-          User aur developer documentation pages
           ================================================================ */}
       <Route path="/docs/user" element={<UserDocumentation />} />
       <Route path="/docs/developer" element={<DeveloperDocumentation />} />
 
       {/* ================================================================
           LEGAL ROUTES
-          Terms and payment policy pages
           ================================================================ */}
       <Route path="/terms" element={<TermsAndConditions />} />
       <Route path="/payment-policy" element={<PaymentPolicy />} />

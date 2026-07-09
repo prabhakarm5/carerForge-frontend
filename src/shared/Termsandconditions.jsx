@@ -1,4 +1,4 @@
-import { LegalLayout, Section } from "./LegalLayout";
+import { LegalLayout, Section } from "./Legallayout";
 
 function TermsAndConditions() {
     return (

@@ -11,7 +11,7 @@ import {
 import { getConversation, getModels } from "../../services/conversationService";
 import { handleApiError } from "../../utils/errorHandler";
 import RechargeModal from "../../components/common/recharge/RechargeModal";
-import useChatStreamStore from "../../services/chatStreamStore";
+import useChatStreamStore from "../../services/Chatstreamstore";
 
 // ─── Config ──────────────────────────────────────────────────────────────
 const SUGGESTIONS = [
