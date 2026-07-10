@@ -90,28 +90,34 @@ function clearRestoreSessionRetryTimer() {
 // axiosInstance already authStore ko import karta hai.
 async function requestRefreshToken() {
   const csrfToken = getCsrfTokenFromCookie();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-  const response = await fetch(`${API_BASE_URL}/api/auth/refresh-token`, {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(csrfToken ? { "X-XSRF-TOKEN": csrfToken } : {}),
-    },
-  });
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/refresh-token`, {
+      method: "POST",
+      credentials: "include",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(csrfToken ? { "X-XSRF-TOKEN": csrfToken } : {}),
+      },
+    });
 
-  if (!response.ok) {
-    const error = new Error(`Refresh token failed with status ${response.status}`);
+    if (!response.ok) {
+      const error = new Error(`Refresh token failed with status ${response.status}`);
 
-    // ✅ Axios jaisa shape bana diya, taaki same isServerUnreachable logic work kare.
-    error.response = {
-      status: response.status,
-    };
+      error.response = {
+        status: response.status,
+      };
 
-    throw error;
+      throw error;
+    }
+
+    return response.json();
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return response.json();
 }
 
 const useAuthStore = create((set, get) => ({
@@ -168,6 +174,19 @@ const useAuthStore = create((set, get) => ({
     }
 
     restoreSessionPromise = (async () => {
+      const cachedBeforeRefresh = tokenStorage.getUser();
+      if (!cachedBeforeRefresh) {
+        set({
+          accessToken: null,
+          accessTokenExpiresAt: null,
+          user: null,
+          isAuthenticated: false,
+          sessionChecked: true,
+          backendUnreachable: false,
+        });
+        return null;
+      }
+
       clearRestoreSessionRetryTimer();
 
       try {

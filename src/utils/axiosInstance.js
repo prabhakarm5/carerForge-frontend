@@ -74,6 +74,22 @@ function isServerUnreachable(error) {
     return !error?.response;
 }
 
+
+function isAuthBootstrapRequest(url = "") {
+    return url.includes("/api/auth/login")
+        || url.includes("/api/auth/register")
+        || url.includes("/api/auth/refresh-token")
+        || url.includes("/api/auth/oauth-session")
+        || url.includes("/api/auth/verify")
+        || url.includes("/api/auth/resend-verification")
+        || url.includes("/api/auth/forgot-password")
+        || url.includes("/api/auth/verify-reset-otp")
+        || url.includes("/api/auth/reset-password")
+        || url.includes("/api/auth/resend-reset-otp")
+        || url.includes("/api/auth/admin-login")
+        || url.includes("/api/auth/verify-admin-login-otp")
+        || url.includes("/api/auth/resend-admin-login-otp");
+}
 function clearServerDownRetryTimer() {
     if (serverDownRetryTimerId) {
         clearTimeout(serverDownRetryTimerId);
@@ -265,8 +281,21 @@ if (refreshChannel) {
 }
 
 // ================= REQUEST INTERCEPTOR =================
-axiosInstance.interceptors.request.use((config) => {
-    const accessToken = useAuthStore.getState().accessToken;
+axiosInstance.interceptors.request.use(async (config) => {
+    const requestUrl = `${config.baseURL || ""}${config.url || ""}`;
+    let accessToken = useAuthStore.getState().accessToken;
+
+    // Dashboard ke multiple widgets login ke turant baad ek saath protected
+    // APIs hit karte hain. Agar memory accessToken abhi hydrate nahi hua,
+    // pehle refresh cookie se token lao, phir request bhejo.
+    if (!accessToken && !isAuthBootstrapRequest(requestUrl) && useAuthStore.getState().user) {
+        try {
+            accessToken = await silentRefresh();
+        } catch {
+            accessToken = null;
+        }
+    }
+
     if (accessToken) {
         config.headers.Authorization = `Bearer ${accessToken}`;
     }

@@ -19,6 +19,18 @@ import RechargeModal from "../common/recharge/RechargeModal";
 const SEARCH_DEBOUNCE_MS = 300;
 const SIDEBAR_STORAGE_KEY = "sidebar_expanded";
 const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+const POLL_INTERVAL_MS = 8000; // silent background refresh — ChatGPT/Claude jaisa live update
+const REFRESH_EVENT = "cf:conversations:refresh";
+
+// ✅ NEW — Kahin bhi app mein (Chat page pe naya chat banne ke baad, ya
+// backend se AI title generate hone ke baad) ye function call karo:
+//   import { notifyConversationsChanged } from "../layout/Sidebar";
+//   notifyConversationsChanged();
+// Sidebar turant khud list refresh kar lega — bina page reload/refresh
+// kiye, exactly Claude/ChatGPT jaisa instant sync.
+export function notifyConversationsChanged() {
+  window.dispatchEvent(new Event(REFRESH_EVENT));
+}
 
 const navItems = [
   { icon: LayoutDashboard, text: "Dashboard",   path: "/dashboard",       color: "#818cf8", bg: "rgba(129,140,248,0.12)" },
@@ -291,6 +303,7 @@ function AccountMenu({ open, anchorExpanded, anchorBtnRef, user, planInfo, onClo
         bottom: "calc(100% + 8px)",
         left: anchorExpanded ? 0 : "calc(100% + 8px)",
         width: 246,
+        maxWidth: "calc(100vw - 24px)",
         maxHeight: "calc(100vh - 90px)",
         overflowY: "auto",
         background: "linear-gradient(160deg,#25252e,#1b1b21)",
@@ -368,7 +381,20 @@ const ChatRow = memo(function ChatRow({
   onConfirmDelete, onDelete, onCancelDelete, onToggleMenu, onArchive, editValue,
 }) {
   return (
-    <div className="relative group" style={{ opacity: isBusy ? 0.4 : 1, pointerEvents: isBusy ? "none" : "auto", transition: `opacity 160ms ${EASE}` }}>
+    <div
+      className="relative group"
+      style={{
+        opacity: isBusy ? 0.4 : 1,
+        pointerEvents: isBusy ? "none" : "auto",
+        transition: `opacity 160ms ${EASE}`,
+        // ✅ PERF — bade chat history mein jo rows screen se bahar hain
+        // unhe browser paint/layout hi nahi karta jab tak scroll karke
+        // paas nahi aate. Lambi list ke saath scroll bahut zyada smooth
+        // ho jaata hai, especially mobile pe.
+        contentVisibility: "auto",
+        containIntrinsicSize: "0px 34px",
+      }}
+    >
       {isEditing ? (
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 8, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.15)" }}>
           <input
@@ -478,15 +504,38 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
   useEffect(() => { loadConversations(""); loadWallet(); return () => clearTimeout(debounceTimer.current); }, [loadWallet]);
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ✅ FIX — pehle yahan ek aur useEffect tha jo pathname "/chat" se
-  // start hone par loadConversations("") ko dobara call karta tha.
-  // Ye redundant tha (pehla useEffect mount par already load kar chuka
-  // hota hai) aur /chat/123 jaisi har navigation par duplicate
-  // /api/conversations call bana raha tha — jo StrictMode ke sath
-  // milkar rapid-fire calls aur refresh-token loop ka ek contributing
-  // factor tha. Conversations list already create/rename/archive/delete
-  // ke time khud update ho jaati hai, isliye is extra fetch ki zaroorat
-  // nahi thi.
+  // ✅ NEW — bina refresh kiye list update: jab bhi koi doosri jagah se
+  // (naya chat banane par, ya AI ka title generate hone ke baad)
+  // notifyConversationsChanged() call hota hai, ye event sun ke turant
+  // list quietly refresh ho jaati hai (koi loading skeleton nahi dikhta,
+  // taaki flicker na ho). Saath hi ek halka background poll bhi hai —
+  // taaki agar backend title thodi der baad generate kare, wo bhi apne
+  // aap dikh jaye — bilkul Claude/ChatGPT jaisa.
+  useEffect(() => {
+    function silentRefresh() {
+      // Agar user abhi rename/delete-confirm/menu ke beech mein hai,
+      // toh disturb mat karo — warna UI achanak neeche se badal jayega.
+      if (editingId || confirmDeleteId || openMenuId) return;
+      loadConversationsQuiet(activeQuery);
+    }
+
+    window.addEventListener(REFRESH_EVENT, silentRefresh);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") silentRefresh();
+    }, POLL_INTERVAL_MS);
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") silentRefresh();
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener(REFRESH_EVENT, silentRefresh);
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [editingId, confirmDeleteId, openMenuId, activeQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -515,6 +564,19 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
     finally { setLoading(false); setSearching(false); }
   }
 
+  // ✅ NEW — "quiet" version: koi loading skeleton nahi dikhata, sirf
+  // background mein chupke se latest data le aata hai. Isi se background
+  // poll aur cross-page refresh event bina flicker/hang ke kaam karte hain.
+  async function loadConversationsQuiet(keyword) {
+    try {
+      const data = keyword ? await searchChats(keyword) : await getRecentChats();
+      setConversations(data || []);
+      setLoadError(false);
+    } catch {
+      // background refresh fail ho toh user ko disturb mat karo
+    }
+  }
+
   async function handleLogoutThis() {
     await logoutCurrentDevice();
     toast.success("Logged out from this device");
@@ -537,7 +599,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
     let prev;
     setConversations((list) => { prev = list; return list.map((c) => (c.id === id ? { ...c, title: newTitle } : c)); });
     setEditingId(null);
-    try { setBusyId(id); await renameChat(id, newTitle); }
+    try { setBusyId(id); await renameChat(id, newTitle); notifyConversationsChanged(); }
     catch (error) { setConversations(prev); handleApiError(error); }
     finally { setBusyId(null); }
   }, [editValue]);
@@ -548,6 +610,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
     setConversations((list) => { prev = list; return list.filter((c) => c.id !== id); });
     try {
       setBusyId(id); await archiveChat(id); toast.success("Chat archived");
+      notifyConversationsChanged();
       if (location.pathname === `/chat/${id}`) navigate("/chat");
     } catch (error) { setConversations(prev); handleApiError(error); }
     finally { setBusyId(null); }
@@ -559,6 +622,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
     setConfirmDeleteId(null);
     try {
       setBusyId(id); await deleteChat(id); toast.success("Chat deleted");
+      notifyConversationsChanged();
       if (location.pathname === `/chat/${id}`) navigate("/chat");
     } catch (error) { setConversations(prev); handleApiError(error); }
     finally { setBusyId(null); }
@@ -567,7 +631,14 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
   const grouped = useMemo(() => groupByDate(conversations), [conversations]);
 
   const isExpanded = expanded || sidebarOpen;
-  const sidebarW = isExpanded ? "w-[260px]" : "w-[60px]";
+
+  // ✅ FIX — mobile aur desktop ke liye alag width. Pehle mobile bhi
+  // 260px full-desktop-width leta tha jo chhoti screen pe bahut bada
+  // lagta tha. Ab mobile drawer sirf 82% (max 300px) leta hai, background
+  // content thoda peek hota hai — modern drawer jaisa feel.
+  const mobileWidthClass = "w-[82%] max-w-[300px]";
+  const desktopWidthClass = isExpanded ? "lg:w-[260px]" : "lg:w-[60px]";
+
   const planInfo = useMemo(() => getPlanInfo(wallet?.currentPlanName), [wallet?.currentPlanName]);
 
   return (
@@ -577,11 +648,18 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
       )}
 
       <aside
-        className={`fixed left-0 top-0 h-screen z-50 flex flex-col ${sidebarW} ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
+        className={`fixed left-0 top-0 h-screen z-50 flex flex-col ${mobileWidthClass} ${desktopWidthClass} ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
         style={{
           background: "linear-gradient(180deg,#1c1c22,#17171b)",
           borderRight: "1px solid rgba(255,255,255,0.06)",
-          transition: `width 260ms ${EASE}, transform 260ms ${EASE}`,
+          // ✅ PERF — sirf width/transform transition karo, aur `contain`
+          // se browser ko batao ke is element ke andar ka reflow bahar
+          // ke page ko touch nahi karega. Ye hi "hang jaisa" feel ka
+          // sabse bada reason tha — poore page ka layout recalc ho raha
+          // tha har frame pe jab sidebar collapse/expand hota tha.
+          transition: `width 200ms ${EASE}, transform 220ms ${EASE}`,
+          willChange: "width, transform",
+          contain: "layout style paint",
         }}
       >
 
@@ -622,10 +700,10 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
           {isExpanded && (
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden flex items-center justify-center w-7 h-7 rounded-lg"
+              className="lg:hidden flex items-center justify-center w-8 h-8 rounded-lg"
               style={{ color: "rgba(255,255,255,0.25)" }}
             >
-              <X size={15} />
+              <X size={16} />
             </button>
           )}
         </div>
@@ -635,7 +713,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
           {isExpanded ? (
             <button
               onClick={() => navigate("/chat")}
-              className="w-full flex items-center gap-2 rounded-xl py-2 px-3 text-white text-[13px] font-medium sb-new-chat-btn"
+              className="w-full flex items-center gap-2 rounded-xl py-2.5 px-3 text-white text-[13px] font-medium sb-new-chat-btn"
               style={{ background: "linear-gradient(135deg, #7c3aed 0%, #9333ea 50%, #db2777 100%)", boxShadow: "0 2px 12px rgba(124,58,237,0.35), inset 0 1px 0 rgba(255,255,255,0.15)" }}
             >
               <Plus size={15} />New chat
@@ -668,7 +746,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
               );
             }
             return (
-              <Link key={item.path} to={item.path} className="nav-row" style={{ display: "flex", alignItems: "center", gap: 9, padding: "6.5px 10px", borderRadius: 10, background: isActive ? item.bg : "transparent", textDecoration: "none" }}>
+              <Link key={item.path} to={item.path} className="nav-row" style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 10, background: isActive ? item.bg : "transparent", textDecoration: "none" }}>
                 <Icon size={14} color={isActive ? item.color : "rgba(255,255,255,0.38)"} style={{ flexShrink: 0 }} />
                 <span style={{ fontSize: 13, fontWeight: isActive ? 600 : 400, color: isActive ? item.color : "rgba(255,255,255,0.5)" }}>
                   {item.text}
@@ -686,7 +764,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
         {isExpanded && (
           <div className="px-2 pt-2 pb-1 shrink-0">
             <div style={{
-              display: "flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 10,
+              display: "flex", alignItems: "center", gap: 7, padding: "7px 10px", borderRadius: 10,
               background: searchFocused ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.03)",
               border: searchFocused ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(255,255,255,0.06)",
               transition: `background 180ms ${EASE}, border-color 180ms ${EASE}`,
@@ -844,6 +922,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
         .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
         .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 99px; }
         .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.12); }
+        .sidebar-scroll { -webkit-overflow-scrolling: touch; }
 
         .sidebar-ghost-btn { color: rgba(255,255,255,0.25); background: transparent; transition: color 140ms ${EASE}, background 140ms ${EASE}; }
         .sidebar-ghost-btn:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.05); }
@@ -859,6 +938,12 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
           background: transparent; transition: background 140ms ${EASE};
         }
         .chat-icon-btn:hover { background: rgba(255,255,255,0.08); }
+
+        /* ✅ Mobile pe touch targets thode bade — 24px tap karna mushkil
+           hota hai, 30px+ recommended hai. */
+        @media (max-width: 1023px) {
+          .chat-icon-btn { width: 30px; height: 30px; }
+        }
 
         .sb-new-chat-btn { transition: transform 140ms ${EASE}, opacity 140ms ${EASE}; }
         .sb-new-chat-btn:hover { opacity: 0.92; }

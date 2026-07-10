@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useOutletContext, Link } from "react-router-dom";
 import {
   Send, Sparkles, Copy, Check, RotateCcw,
@@ -12,6 +12,7 @@ import { getConversation, getModels } from "../../services/conversationService";
 import { handleApiError } from "../../utils/errorHandler";
 import RechargeModal from "../../components/common/recharge/RechargeModal";
 import useChatStreamStore from "../../services/Chatstreamstore";
+import { notifyConversationsChanged } from "../../components/dashboard/Sidebar";
 
 // ─── Config ──────────────────────────────────────────────────────────────
 const SUGGESTIONS = [
@@ -729,7 +730,20 @@ function MessageRow({ role, content, image, isStreaming = false, onOpenPanel }) 
       </div>
 
       <div style={{ flex: 1, minWidth: 0, transition: "opacity 0.12s ease-out" }}>
-        <RenderedMessage content={content} onOpenPanel={onOpenPanel} />
+        {isStreaming ? (
+          <div style={{
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
+            fontSize: 15.3,
+            lineHeight: 1.85,
+            color: "#d3dbe8",
+            paddingTop: 1,
+          }}>
+            {content}
+          </div>
+        ) : (
+          <RenderedMessage content={content} onOpenPanel={onOpenPanel} />
+        )}
 
         {isStreaming && (
           <span style={{
@@ -1683,6 +1697,7 @@ export default function ChatPage() {
           skipActiveKeySyncRef.current = true;
           setActiveKey(meta.conversationId);
           navigate(`/chat/${meta.conversationId}`, { replace: true });
+          notifyConversationsChanged(); 
         }
       },
       onError: () => {},
@@ -1701,7 +1716,7 @@ export default function ChatPage() {
   }
 
   // ── Layout ────────────────────────────────────────────────────────────
-  const CONTENT_MAX_WIDTH = "min(880px, 95vw)";
+  const CONTENT_MAX_WIDTH = isMobile ? "100%" : "min(880px, 95vw)";
 
   return (
     <div style={{
@@ -1748,7 +1763,7 @@ export default function ChatPage() {
       }}>
 
         <div ref={scrollRef} className="chat-scroll-area" style={{ flex: "1 1 auto", overflowY: "auto", minHeight: 0 }}>
-          <div style={{ maxWidth: CONTENT_MAX_WIDTH, margin: "0 auto", padding: isMobile ? "18px 12px 20px" : "32px 20px 24px" }}>
+          <div style={{ maxWidth: CONTENT_MAX_WIDTH, margin: "0 auto", padding: isMobile ? "16px 12px 18px" : "32px 20px 24px" }}>
 
             {loadingHistory && (
               <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
@@ -1838,7 +1853,7 @@ export default function ChatPage() {
 
         {showScrollBtn && !showEmptyState && (
           <div style={{
-            position: "absolute", bottom: 84, left: "50%", transform: "translateX(-50%)",
+            position: "absolute", bottom: isMobile ? 92 : 84, left: "50%", transform: "translateX(-50%)",
             zIndex: 20, animation: "fadeUp 0.15s ease-out",
           }}>
             <button
@@ -1897,7 +1912,7 @@ export default function ChatPage() {
               display: "flex", alignItems: "flex-end", gap: 9,
               background: "rgba(255,255,255,0.045)",
               border: "1px solid rgba(255,255,255,0.09)",
-              borderRadius: 22, padding: isMobile ? "9px 9px" : "11px 12px",
+              borderRadius: isMobile ? 18 : 22, padding: isMobile ? "8px 8px" : "11px 12px",
               transition: "border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease",
             }}
               onFocusCapture={e => {
@@ -1950,8 +1965,8 @@ export default function ChatPage() {
                 rows={1}
                 style={{
                   flex: 1, background: "transparent", outline: "none", border: "none",
-                  fontSize: 15.3, color: "#fff", resize: "none", padding: "7px 3px",
-                  maxHeight: 180, fontFamily: "inherit", lineHeight: 1.75, minWidth: 0,
+                  fontSize: isMobile ? 16 : 15.3, color: "#fff", resize: "none", padding: isMobile ? "8px 2px" : "7px 3px",
+                  maxHeight: isMobile ? 120 : 180, fontFamily: "inherit", lineHeight: 1.65, minWidth: 0,
                 }}
                 className="placeholder:text-slate-600"
               />

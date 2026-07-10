@@ -12,7 +12,7 @@ const TEXT_MUTED = "rgba(255,255,255,0.45)";
 const TEXT_DIM   = "rgba(255,255,255,0.22)";
 const MENU_BG    = "linear-gradient(160deg,#24242e,#18181f)";
 const ACCENT_LT  = "#a78bfa";
-const EASE       = "cubic-bezier(0.22, 1, 0.36, 1)"; // smooth "ease-out-expo"-ish
+const EASE       = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 function getPlanStyle(planRaw) {
   const hasPlan = planRaw != null && String(planRaw).trim() !== "";
@@ -32,10 +32,6 @@ function getPlanStyle(planRaw) {
   return { label, color: "#a78bfa", bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.25)", icon: Sparkles };
 }
 
-/* ─── Hook: smooth mount/unmount for any popover ─────────────────
-   `open` drives visibility instantly (for the animation to start),
-   `rendered` stays true until the exit transition finishes, so we
-   never yank the element out mid-animation (fixes "laggy" popups). */
 function useSmoothOpen(isOpen, durationMs = 180) {
   const [rendered, setRendered] = useState(isOpen);
   useEffect(() => {
@@ -47,7 +43,6 @@ function useSmoothOpen(isOpen, durationMs = 180) {
   return rendered;
 }
 
-/* ─── Avatar ─────────────────────────────────────────────────────── */
 function Avatar({ user, size = 26 }) {
   const [imgError, setImgError] = useState(false);
   const imgSrc = user?.profileImage || null;
@@ -79,7 +74,6 @@ function Avatar({ user, size = 26 }) {
   );
 }
 
-/* ─── IBtn ─── */
 function IBtn({ onClick, children, style = {}, className = "" }) {
   return (
     <button
@@ -96,7 +90,6 @@ function IBtn({ onClick, children, style = {}, className = "" }) {
   );
 }
 
-/* ─── Token Badge ─── */
 function TokenBadge({ wallet }) {
   if (!wallet) return null;
   return (
@@ -115,15 +108,11 @@ function TokenBadge({ wallet }) {
   );
 }
 
-/* ─── Profile Dropdown ───────────────────────────────────────────
-   Panels: "menu" -> "confirmLogout" -> "chooseScope". Each swap is
-   a smooth cross-fade + slide, height animates automatically via
-   grid-template-rows trick (no jank, no fixed heights needed). ── */
 function ProfileDropdown({ user, wallet, open, onClose }) {
   const rendered = useSmoothOpen(open, 180);
   const [visible, setVisible] = useState(false);
-  const [panel, setPanel] = useState("menu"); // menu | confirmLogout | chooseScope
-  const [loggingOut, setLoggingOut] = useState(null); // null | "this" | "all"
+  const [panel, setPanel] = useState("menu");
+  const [loggingOut, setLoggingOut] = useState(null);
   const dropRef = useRef(null);
 
   const navigate = useNavigate();
@@ -185,7 +174,7 @@ function ProfileDropdown({ user, wallet, open, onClose }) {
       <div style={{ overflowY: "auto", maxHeight: "calc(100vh - 80px)" }}>
 
         {panel === "menu" && (
-          <Panel fadeKey="menu">
+          <Panel>
             <div style={{ padding: "16px 16px 12px", borderBottom: `1px solid ${BORDER}` }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <Avatar user={user} size={40} />
@@ -223,7 +212,7 @@ function ProfileDropdown({ user, wallet, open, onClose }) {
         )}
 
         {panel === "confirmLogout" && (
-          <Panel fadeKey="confirm">
+          <Panel>
             <PanelHeader onBack={() => setPanel("menu")} title="Sign out" />
             <div style={{ padding: "6px 16px 16px" }}>
               <div style={{
@@ -247,7 +236,7 @@ function ProfileDropdown({ user, wallet, open, onClose }) {
         )}
 
         {panel === "chooseScope" && (
-          <Panel fadeKey="scope">
+          <Panel>
             <PanelHeader onBack={() => !loggingOut && setPanel("confirmLogout")} title="Sign out scope" />
             <div style={{ padding: "6px 12px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
               <ScopeBtn

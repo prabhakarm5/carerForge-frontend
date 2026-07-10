@@ -1,5 +1,5 @@
-﻿import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Eye, EyeOff, Clock, AlertTriangle, CheckCircle2, ShieldAlert, Sparkles, Lock } from "lucide-react";
 import useAuthStore from "../../store/authStore";
@@ -75,7 +75,7 @@ function AttemptsPill({ failed, max }) {
         }`}>
             <ShieldAlert size={14} className="flex-shrink-0" />
             {isLast
-                ? "Last attempt — account may be locked after this"
+                ? "Last attempt Ã¢â‚¬â€ account may be locked after this"
                 : `${left} of ${max} attempts remaining`
             }
         </div>
@@ -122,6 +122,7 @@ function ServerBanner({ message, isError, countdown, totalSeconds, onDismiss }) 
 
 function LoginForm() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const login = useAuthStore(state => state.login);
 
     const [email, setEmail] = useState("");
@@ -138,6 +139,13 @@ function LoginForm() {
     const [countdownStart, setCountdownStart] = useState(0);
     const [failedAttempts, setFailedAttempts] = useState(0);
     const [resendCooldown, setResendCooldown] = useState(0);
+
+    useEffect(() => {
+        const oauthError = searchParams.get("oauthError");
+        if (!oauthError) return;
+        setIsError(true);
+        setServerMessage(oauthError);
+    }, [searchParams]);
 
     const countdown = useCountdown(countdownStart, () => {
         setServerMessage("");
@@ -203,13 +211,13 @@ function LoginForm() {
 
         try {
             setLoading(true);
-            // ✅ FIX — generateFingerprint() ab async hai (SHA-256 ke liye
+            // ? FIX Ã¢â‚¬â€ generateFingerprint() ab async hai (SHA-256 ke liye
             // crypto.subtle.digest use karta hai, jo Promise return karta hai).
             // Pehle yahan `await` missing tha, isliye `fingerprint` ek Promise
             // object ban jaata tha, plain hex string nahi. JSON.stringify karne
             // par woh Promise `{}` jaisa serialize ho jaata tha, aur backend ka
             // Jackson deserializer LoginRequest.fingerprint (String type) ke
-            // against object dekh ke fail ho jaata tha — isi se "Request body
+            // against object dekh ke fail ho jaata tha Ã¢â‚¬â€ isi se "Request body
             // is invalid or malformed" error aa raha tha.
             const fingerprint = await generateFingerprint();
             const response = await loginUser(email, password, fingerprint);
@@ -255,53 +263,48 @@ function LoginForm() {
     }
 
     return (
-        <div className="relative flex min-h-full w-full items-center justify-center overflow-y-auto bg-[var(--surface)] px-5 py-10 md:px-8">
+        <div className="relative flex min-h-full w-full items-center justify-center overflow-y-auto bg-[#0a0713] px-4 py-6 md:px-8">
 
-            {/* Static glow — no animation, no JS, instant paint */}
-            <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-[#ff6b4a]/[0.15] blur-[80px]" />
-                <div className="absolute -bottom-24 -right-16 h-80 w-80 rounded-full bg-violet-500/[0.12] blur-[90px]" />
-            </div>
 
             <div className="relative w-full max-w-[430px]">
-                <div className="relative rounded-[24px] border border-[var(--border-soft)] bg-[var(--surface-elevated,var(--surface))] p-7 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.25)] md:p-9">
+                <div className="relative rounded-[22px] border border-white/10 bg-white/[0.065] p-6 shadow-[0_24px_80px_-30px_rgba(0,0,0,0.85)] backdrop-blur-xl md:p-7">
 
-                    {/* Icon badge — solid pulse via CSS animation, no JS */}
-                    <div className={`mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#ff6b4a] to-[#ff8a5c] shadow-[0_8px_20px_-4px_rgba(255,107,74,0.5)] ${loading ? "animate-pulse" : ""}`}>
+                    {/* Icon badge Ã¢â‚¬â€ solid pulse via CSS animation, no JS */}
+                    <div className={`mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-fuchsia-500 to-violet-600 shadow-[0_8px_20px_-4px_rgba(255,107,74,0.5)] ${loading ? "animate-pulse" : ""}`}>
                         <Lock size={20} className="text-white" />
                     </div>
 
                     <div className="flex items-center gap-2 mb-1">
-                        <Sparkles size={13} className="text-[#ff6b4a]" />
-                        <span className="text-[11px] font-bold uppercase tracking-widest text-[#ff6b4a]">CareerForge AI</span>
+                        <Sparkles size={13} className="text-amber-200" />
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-amber-200">CareerForge AI</span>
                     </div>
-                    <h1 className="text-[28px] font-black text-[var(--text-primary)] tracking-tight">Welcome Back</h1>
-                    <p className="text-[var(--text-muted)] text-[13px] mt-1.5">Log in to continue building your career</p>
+                    <h1 className="text-[28px] font-black text-white tracking-tight">Welcome back</h1>
+                    <p className="text-white/62 text-[13px] mt-1.5">Continue your chats, credits, and AI workspace</p>
 
                     <form onSubmit={handleSubmit} className="space-y-3 mt-8">
 
                         <input
                             type="email"
-                            placeholder="Email"
+                            placeholder="you@example.com"
                             value={email}
                             disabled={loading}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full px-4 py-3.5 rounded-xl bg-[var(--surface-soft)] border border-[var(--border-soft)] text-[var(--text-primary)] text-[14px] placeholder-[var(--text-muted)] outline-none focus:border-[#ff6b4a] focus:ring-2 focus:ring-[#ff6b4a]/15 transition-colors duration-150 disabled:opacity-60"
+                            className="w-full px-4 py-3.5 rounded-xl bg-[var(--surface-soft)] border border-[var(--border-soft)] text-white text-[14px] placeholder:text-white/35 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/25 transition-colors duration-150 disabled:opacity-60"
                         />
 
                         <div className="relative">
                             <input
                                 type={showPassword ? "text" : "password"}
-                                placeholder="Password"
+                                placeholder="Enter your password"
                                 value={password}
                                 disabled={loading}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full px-4 py-3.5 pr-12 rounded-xl bg-[var(--surface-soft)] border border-[var(--border-soft)] text-[var(--text-primary)] text-[14px] placeholder-[var(--text-muted)] outline-none focus:border-[#ff6b4a] focus:ring-2 focus:ring-[#ff6b4a]/15 transition-colors duration-150 disabled:opacity-60"
+                                className="w-full px-4 py-3.5 pr-12 rounded-xl bg-[var(--surface-soft)] border border-[var(--border-soft)] text-white text-[14px] placeholder:text-white/35 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/25 transition-colors duration-150 disabled:opacity-60"
                             />
                             <button
                                 type="button"
                                 disabled={loading}
-                                className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors duration-150 disabled:opacity-40"
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/62 hover:text-white transition-colors duration-150 disabled:opacity-40"
                                 onClick={() => setShowPassword(!showPassword)}
                             >
                                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -318,7 +321,7 @@ function LoginForm() {
                                         onChange={(e) => setRememberMe(e.target.checked)}
                                         className="peer sr-only"
                                     />
-                                    <div className="w-4.5 h-4.5 rounded-md border border-[var(--border-soft)] bg-[var(--surface-soft)] peer-checked:bg-[#ff6b4a] peer-checked:border-[#ff6b4a] transition-colors duration-150 flex items-center justify-center">
+                                    <div className="w-4.5 h-4.5 rounded-md border border-[var(--border-soft)] bg-[var(--surface-soft)] peer-checked:bg-violet-500 peer-checked:border-violet-500 transition-colors duration-150 flex items-center justify-center">
                                         {rememberMe && (
                                             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5">
                                                 <polyline points="20 6 9 17 4 12" />
@@ -326,13 +329,13 @@ function LoginForm() {
                                         )}
                                     </div>
                                 </div>
-                                <span className="text-[var(--text-muted)] text-[13px] group-hover:text-[var(--text-primary)] transition-colors">
+                                <span className="text-white/62 text-[13px] group-hover:text-white transition-colors">
                                     Remember me
                                 </span>
                             </label>
                             <Link
                                 to="/forgot-password"
-                                className="text-[#e45738] hover:text-[#c7472c] text-[13px] font-medium transition-colors"
+                                className="text-amber-200 hover:text-white text-[13px] font-medium transition-colors"
                             >
                                 Forgot Password?
                             </Link>
@@ -344,7 +347,7 @@ function LoginForm() {
 
                         <button
                             disabled={loading || countdown > 0}
-                            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#ff6b4a] to-[#ff8a5c] text-white text-[14px] font-bold tracking-tight shadow-[0_10px_24px_-6px_rgba(255,107,74,0.5)] hover:shadow-[0_14px_30px_-6px_rgba(255,107,74,0.65)] active:scale-[0.99] transition-all duration-150 disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-400 via-fuchsia-500 to-violet-600 text-white text-[14px] font-bold tracking-tight shadow-[0_14px_30px_-12px_rgba(217,70,239,0.8)] hover:shadow-[0_18px_36px_-12px_rgba(245,158,11,0.55)] active:scale-[0.99] transition-all duration-150 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {loading ? (
                                 <span className="flex items-center justify-center gap-2">
@@ -374,12 +377,12 @@ function LoginForm() {
 
                         {showResendVerification && (
                             <div className="p-4 rounded-xl bg-[var(--surface-soft)] border border-[var(--border-soft)] text-center">
-                                <p className="text-[var(--text-muted)] text-[13px]">Email not verified?</p>
+                                <p className="text-white/62 text-[13px]">Email not verified?</p>
                                 <button
                                     type="button"
                                     onClick={handleResendVerification}
                                     disabled={resendSeconds > 0}
-                                    className="mt-2 text-[13px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 mx-auto text-[#e45738] hover:text-[#c7472c] disabled:text-[var(--text-muted)]"
+                                    className="mt-2 text-[13px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 mx-auto text-amber-200 hover:text-white disabled:text-white/62"
                                 >
                                     {resendSeconds > 0 ? (
                                         <><Clock size={13} /> Resend in {resendSeconds}s</>
@@ -393,17 +396,17 @@ function LoginForm() {
 
                     <div className="my-6 flex items-center gap-3">
                         <div className="flex-1 h-px bg-[var(--border-soft)]" />
-                        <p className="text-[var(--text-muted)] text-xs font-medium tracking-wide">OR CONTINUE WITH</p>
+                        <p className="text-white/62 text-xs font-medium tracking-wide">OR CONTINUE WITH</p>
                         <div className="flex-1 h-px bg-[var(--border-soft)]" />
                     </div>
 
                     <SocialLogin />
 
-                    <p className="text-[var(--text-muted)] mt-8 text-center text-[13px]">
+                    <p className="text-white/62 mt-8 text-center text-[13px]">
                         Don't have an account?{" "}
                         <Link
                             to="/register"
-                            className="text-[#e45738] ml-1 hover:text-[#c7472c] font-semibold transition-colors"
+                            className="text-amber-200 ml-1 hover:text-white font-semibold transition-colors"
                         >
                             Create Account
                         </Link>

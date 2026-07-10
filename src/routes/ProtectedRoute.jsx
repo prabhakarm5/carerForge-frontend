@@ -1,27 +1,33 @@
 import { Navigate } from "react-router-dom";
+import { Loader2, WifiOff } from "lucide-react";
 
 import useAuthStore from "../store/authStore";
 
-// ✅ FIX — App.jsx no longer waits for sessionChecked before mounting
-// routes, so ProtectedRoute now has to handle that brief window itself.
-// Before restoreSession() resolves (sessionChecked === false),
-// isAuthenticated is still at its default value — redirecting to
-// /login right away would wrongly kick out an already-logged-in user
-// on every refresh, even when the backend is fine. So: while the check
-// is still in flight, render a small inline loader instead of a
-// redirect. Once sessionChecked flips (login, logout, or backend-down
-// fallback), the real isAuthenticated check below decides.
 function ProtectedRoute({ children }) {
     const sessionChecked = useAuthStore((state) => state.sessionChecked);
     const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+    const backendUnreachable = useAuthStore((state) => state.backendUnreachable);
 
     if (!sessionChecked) {
         return (
-            <div className="flex min-h-[40vh] items-center justify-center">
-                <svg className="h-6 w-6 animate-spin text-[#ff6b4a]" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.2" />
-                    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-                </svg>
+            <div className="grid min-h-[55vh] place-items-center px-5">
+                <div className="w-full max-w-sm rounded-2xl border border-[var(--border-soft)] bg-[var(--surface-elevated,var(--surface))] p-6 text-center shadow-[0_20px_60px_-30px_rgba(0,0,0,0.45)]">
+                    <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#ff6b4a]" />
+                    <p className="mt-4 text-sm font-bold text-[var(--text-primary)]">Checking your secure session</p>
+                    <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">This usually takes a moment.</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (backendUnreachable && isAuthenticated) {
+        return (
+            <div className="grid min-h-[55vh] place-items-center px-5">
+                <div className="w-full max-w-sm rounded-2xl border border-amber-400/25 bg-amber-400/10 p-6 text-center">
+                    <WifiOff className="mx-auto h-6 w-6 text-amber-400" />
+                    <p className="mt-4 text-sm font-bold text-[var(--text-primary)]">Backend is reconnecting</p>
+                    <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">Your login is kept locally. Start the backend server and this page will recover.</p>
+                </div>
             </div>
         );
     }

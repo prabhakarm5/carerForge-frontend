@@ -28,13 +28,13 @@ function getCsrfTokenFromCookie() {
 // FIX (root cause of "bahut lag/atak raha hai" during streaming):
 // every store update forces the chat UI to re-parse the FULL accumulated
 // answer from scratch (markdown blocks, code blocks, syntax highlighting
-// tokens — all of it, every time). Flushing on every animation frame
+// tokens â€” all of it, every time). Flushing on every animation frame
 // (up to ~60x/sec) meant that cost was paid up to 60 times a second and
 // grew with the length of the answer, which is exactly what a freeze /
 // stutter under long responses looks like. Batching flushes to a fixed
 // interval cuts the number of full re-parses by ~3-4x while still
 // reading as smooth, continuous typing to the user.
-const FLUSH_INTERVAL_MS = 45;
+const FLUSH_INTERVAL_MS = 110;
 
 const useChatStreamStore = create((set, get) => ({
     streamsById: {},
@@ -317,6 +317,7 @@ const useChatStreamStore = create((set, get) => ({
                     if (done) break;
 
                     sseBuffer += decoder.decode(value, { stream: true });
+                    sseBuffer = sseBuffer.replace(/\r\n/g, "\n");
 
                     let boundary;
                     while ((boundary = sseBuffer.indexOf("\n\n")) !== -1) {

@@ -194,6 +194,22 @@ export async function refreshToken() {
     return response.data; // { accessToken, tokenType, message }
 }
 
+
+// ================= OAUTH SESSION COMPLETE =================
+// OAuth redirect ke baad backend httpOnly refresh/fingerprint cookies set karta hai.
+// Ye call accessToken ko response body se laakar frontend in-memory auth store mein set karwata hai.
+export async function completeOAuthSession() {
+
+    const response = await axiosInstance.post(
+
+        API_BASE_URL +
+        API.AUTH.OAUTH_SESSION
+
+    );
+
+    return response.data; // { id, name, email, role, accessToken, profileImage }
+}
+
 // ================= LOGOUT (current device) =================
 export async function logout() {
 

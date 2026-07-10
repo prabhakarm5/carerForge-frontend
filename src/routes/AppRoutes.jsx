@@ -1,4 +1,4 @@
-﻿// src/routes/AppRoutes.jsx
+// src/routes/AppRoutes.jsx
 
 import { Routes, Route } from "react-router-dom";
 
@@ -17,9 +17,10 @@ import VerificationFailedPage from "../pages/Verification/VerificationFailedPage
 import ForgotPasswordPage from "../pages/Auth/ForgotPasswordPage";
 import VerifyResetOtpPage from "../pages/Auth/VerifyResetOtpPage";
 import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
+import OAuthSuccessPage from "../pages/Auth/OAuthSuccessPage";
 
 // ================= DASHBOARD / USER PAGES =================
-// ✅ Actual path: src/pages/chat/ChatPage.jsx
+// ? Actual path: src/pages/chat/ChatPage.jsx
 // Cloudflare/Linux case-sensitive hai, isliye "chat" lowercase rakha hai.
 import ChatPage from "../pages/chat/ChatPage";
 
@@ -27,7 +28,7 @@ import ProfilePage from "../pages/Profile/ProfilePage";
 import DashboardPage from "../pages/Dashboard/DashboardPage";
 import ImageGeneratorPage from "../pages/ImageGeneratorPage";
 
-// ✅ Actual path: src/pages/Wallet/walletPage.jsx
+// ? Actual path: src/pages/Wallet/walletPage.jsx
 // Isliye "walletPage" lowercase w ke saath rakha hai.
 import WalletPage from "../pages/Wallet/walletPage";
 
@@ -81,6 +82,7 @@ export default function AppRoutes() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/verify-reset-otp" element={<VerifyResetOtpPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/oauth/success" element={<OAuthSuccessPage />} />
       </Route>
 
       {/* ================================================================

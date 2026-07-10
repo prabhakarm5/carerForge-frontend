@@ -1,48 +1,41 @@
 // src/components/auth/SocialLogin.jsx
-import React from "react";
+import React, { useState } from "react";
 import { FaGoogle, FaGithub } from "react-icons/fa";
+import { Loader2 } from "lucide-react";
+import { API_BASE_URL } from "../../config/api";
 
 function SocialLogin() {
-  const handleGoogleLogin = () => {
-    // TODO: yahan apna Google OAuth URL / flow use karo
-    console.log("Google login clicked");
+  const [loadingProvider, setLoadingProvider] = useState(null);
+
+  const startOAuthLogin = (provider) => {
+    setLoadingProvider(provider);
+    // Backend Spring Security handles provider state + callback securely.
+    // Frontend only starts the redirect; JWT cookies are issued by backend after success.
+    window.location.href = `${API_BASE_URL}/oauth2/authorization/${provider}`;
   };
 
-  const handleGithubLogin = () => {
-    // TODO: yahan apna GitHub OAuth URL / flow use karo
-    console.log("GitHub login clicked");
-  };
+  const disabled = Boolean(loadingProvider);
 
   return (
-    <div className="space-y-3">
-      {/* Google */}
+    <div className="grid gap-3 sm:grid-cols-2">
       <button
         type="button"
-        onClick={handleGoogleLogin}
-        className="w-full flex items-center justify-center gap-3 rounded-2xl px-4 py-2.5
-        bg-white text-slate-800 border border-slate-200
-        hover:bg-slate-50 hover:border-slate-300
-        dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700
-        dark:hover:bg-slate-800 dark:hover:border-slate-500
-        transition-all duration-200 shadow-[0_10px_30px_rgba(15,23,42,0.12)]"
+        disabled={disabled}
+        onClick={() => startOAuthLogin("google")}
+        className="flex min-h-11 items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-gradient-to-r from-white/[0.08] to-amber-400/[0.12] px-4 py-2.5 text-white shadow-[0_10px_28px_-18px_rgba(245,158,11,0.9)] transition-all duration-150 hover:-translate-y-0.5 hover:border-amber-300/55 disabled:translate-y-0 disabled:cursor-wait disabled:opacity-70"
       >
-        <FaGoogle className="h-5 w-5" />
-        <span className="text-[13px] font-medium">Continue with Google</span>
+        {loadingProvider === "google" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FaGoogle className="h-4 w-4 text-orange-500" />}
+        <span className="text-[13px] font-bold">Google</span>
       </button>
 
-      {/* GitHub */}
       <button
         type="button"
-        onClick={handleGithubLogin}
-        className="w-full flex items-center justify-center gap-3 rounded-2xl px-4 py-2.5
-        bg-slate-900 text-slate-100 border border-slate-800
-        hover:bg-slate-800 hover:border-slate-700
-        dark:bg-slate-100 dark:text-slate-900 dark:border-slate-300
-        dark:hover:bg-white dark:hover:border-slate-400
-        transition-all duration-200 shadow-[0_10px_30px_rgba(15,23,42,0.18)]"
+        disabled={disabled}
+        onClick={() => startOAuthLogin("github")}
+        className="flex min-h-11 items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-gradient-to-r from-white/[0.08] to-violet-500/[0.14] px-4 py-2.5 text-white shadow-[0_10px_28px_-18px_rgba(124,58,237,1)] transition-all duration-150 hover:-translate-y-0.5 hover:border-violet-300/60 disabled:translate-y-0 disabled:cursor-wait disabled:opacity-70"
       >
-        <FaGithub className="h-5 w-5" />
-        <span className="text-[13px] font-medium">Continue with GitHub</span>
+        {loadingProvider === "github" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FaGithub className="h-4 w-4" />}
+        <span className="text-[13px] font-bold">GitHub</span>
       </button>
     </div>
   );

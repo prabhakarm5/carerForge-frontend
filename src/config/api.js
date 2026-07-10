@@ -62,6 +62,7 @@ export const API = {
 
     // COMMON
     REFRESH_TOKEN: "/api/auth/refresh-token",
+    OAUTH_SESSION: "/api/auth/oauth-session",
     LOGOUT: "/api/auth/logout",
     LOGOUT_ALL_DEVICES: "/api/auth/logout-all-devices",
   },
