@@ -30,7 +30,7 @@ if (!rawApiBaseUrl && import.meta.env.PROD) {
 // Local fallback: http://localhost:9092
 // Last slash remove: https://api.com/ -> https://api.com
 export const API_BASE_URL = (
-  rawApiBaseUrl || "http://careerforge-ai-env.eba-mp5s8gpr.ap-south-1.elasticbeanstalk.com/"
+  rawApiBaseUrl || "http://localhost:9092"
 ).replace(/\/+$/, "");
 
 // ✅ Development warning
