@@ -1,17 +1,17 @@
-// {
-//   "$schema": "node_modules/wrangler/config-schema.json",
-//   "name": "carerforge-frontend",
-//   "main": "worker.js",
-//   "compatibility_date": "2026-07-09",
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "carerforge-frontend",
+  "main": "worker.js",
+  "compatibility_date": "2026-07-09",
 
-//   "assets": {
-//     "directory": "./dist",
-//     "binding": "ASSETS",
-//     "not_found_handling": "single-page-application",
-//     "run_worker_first": ["/api/*"]
-//   },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
 
-//   "vars": {
-//     "BACKEND_ORIGIN": "http://careerforge-ai-env.eba-mp5s8gpr.ap-south-1.elasticbeanstalk.com"
-//   }
-// }
+  "vars": {
+    "BACKEND_ORIGIN": "http://careerforge-ai-env.eba-mp5s8gpr.ap-south-1.elasticbeanstalk.com"
+  }
+}
