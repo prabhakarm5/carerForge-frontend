@@ -247,7 +247,7 @@ async function silentRefresh() {
         useAuthStore.getState().logoutLocalOnly();
 
         // ✅ FIX — "/" nahi, seedha "/login" page pe bhejo
-        window.location.replace("/login");
+        window.location.replace("/login?reason=session-expired");
         throw e;
 
     } finally {

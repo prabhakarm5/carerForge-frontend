@@ -1,13 +1,18 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Eye, EyeOff, Clock, AlertTriangle, CheckCircle2, ShieldAlert, Sparkles, Lock } from "lucide-react";
+import { Eye, EyeOff, Clock, AlertTriangle, CheckCircle2, ShieldAlert, Sparkles, Lock, Mail } from "lucide-react";
 import useAuthStore from "../../store/authStore";
 import { generateFingerprint } from "../../utils/fingerprint";
 import { handleApiError } from "../../utils/errorHandler";
 import { loginUser, resendVerificationEmail } from "../../services/userAuthService";
 import HumanVerification from "../../components/auth/HumanVerification";
 import SocialLogin from "../../components/auth/SocialLogin";
+
+// NOTE: This component renders ONLY the right-side form. Your route/layout
+// already renders <AuthLeftPanel /> as a sibling — do NOT import or render
+// it again in here, that was what caused the duplicate panel + the extra
+// lag (two full blurred backgrounds compositing at once).
 
 const MAX_ATTEMPTS = 5;
 
@@ -40,22 +45,22 @@ function useCountdown(initialSeconds, onFinish) {
 }
 
 function CountdownRing({ seconds, total }) {
-    const radius = 18;
+    const radius = 16;
     const circumference = 2 * Math.PI * radius;
     const progress = total > 0 ? (seconds / total) * circumference : 0;
     return (
-        <div className="relative w-11 h-11 flex-shrink-0">
-            <svg className="w-full h-full -rotate-90" viewBox="0 0 44 44">
-                <circle cx="22" cy="22" r={radius} fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="3" />
+        <div className="relative w-9 h-9 flex-shrink-0">
+            <svg className="w-full h-full -rotate-90" viewBox="0 0 40 40">
+                <circle cx="20" cy="20" r={radius} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="3" />
                 <circle
-                    cx="22" cy="22" r={radius} fill="none" stroke="currentColor"
+                    cx="20" cy="20" r={radius} fill="none" stroke="currentColor"
                     strokeWidth="3" strokeLinecap="round"
                     strokeDasharray={circumference}
                     strokeDashoffset={circumference - progress}
                     className="transition-all duration-1000 ease-linear"
                 />
             </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold tabular-nums">
+            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold tabular-nums">
                 {seconds}
             </span>
         </div>
@@ -68,14 +73,17 @@ function AttemptsPill({ failed, max }) {
     if (left <= 0) return null;
     const isLast = left === 1;
     return (
-        <div className={`flex items-center gap-2 px-3.5 py-2.5 rounded-2xl text-[12.5px] font-semibold border ${
-            isLast
-                ? "bg-red-500/10 border-red-500/30 text-red-500"
-                : "bg-orange-500/10 border-orange-500/25 text-orange-500"
-        }`}>
-            <ShieldAlert size={14} className="flex-shrink-0" />
+        <div
+            className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-[12px] font-semibold"
+            style={{
+                background: isLast ? "rgba(239,68,68,0.15)" : "rgba(249,115,22,0.15)",
+                border: `1px solid ${isLast ? "rgba(248,113,113,0.35)" : "rgba(251,146,60,0.3)"}`,
+                color: isLast ? "#fca5a5" : "#fdba74",
+            }}
+        >
+            <ShieldAlert size={13} className="flex-shrink-0" />
             {isLast
-                ? "Last attempt Ã¢â‚¬â€ account may be locked after this"
+                ? "Last attempt — account may be locked after this"
                 : `${left} of ${max} attempts remaining`
             }
         </div>
@@ -86,36 +94,72 @@ function ServerBanner({ message, isError, countdown, totalSeconds, onDismiss }) 
     if (!message) return null;
     const hasCountdown = countdown > 0;
     return (
-        <div className={`rounded-2xl border p-3.5 ${
-            isError
-                ? "bg-red-500/8 border-red-500/25 text-red-500"
-                : "bg-emerald-500/8 border-emerald-500/25 text-emerald-500"
-        }`}>
-            <div className="flex items-start gap-3">
+        <div
+            className="rounded-xl p-3"
+            style={{
+                background: isError ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)",
+                border: `1px solid ${isError ? "rgba(248,113,113,0.35)" : "rgba(52,211,153,0.35)"}`,
+                color: isError ? "#fecaca" : "#a7f3d0",
+            }}
+        >
+            <div className="flex items-start gap-2.5">
                 {hasCountdown ? (
-                    <div className={isError ? "text-red-500" : "text-emerald-500"}>
-                        <CountdownRing seconds={countdown} total={totalSeconds} />
-                    </div>
+                    <CountdownRing seconds={countdown} total={totalSeconds} />
                 ) : (
                     <div className="mt-0.5 flex-shrink-0">
-                        {isError ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
+                        {isError ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
                     </div>
                 )}
                 <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium leading-relaxed">{message}</p>
+                    <p className="text-[12.5px] font-medium leading-relaxed">{message}</p>
                     {hasCountdown && (
-                        <p className="text-[11px] mt-0.5 opacity-60">You can retry once the timer ends.</p>
+                        <p className="text-[10.5px] mt-0.5 opacity-70">You can retry once the timer ends.</p>
                     )}
                 </div>
                 {!hasCountdown && (
                     <button type="button" onClick={onDismiss}
-                        className="opacity-40 hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        className="opacity-60 hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                         </svg>
                     </button>
                 )}
             </div>
+        </div>
+    );
+}
+
+// Labeled input with a leading icon. All color/background via inline style
+// (this project's Tailwind build doesn't compile arbitrary opacity classes
+// like bg-white/[0.06], so those silently render as transparent/white).
+function FieldInput({ label, icon: Icon, error, rightSlot, className = "", ...props }) {
+    return (
+        <div>
+            {label && (
+                <label className="mb-1.5 block text-[11.5px] font-semibold" style={{ color: "rgba(255,255,255,0.55)" }}>
+                    {label}
+                </label>
+            )}
+            <div className="relative">
+                {Icon && (
+                    <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: "rgba(255,255,255,0.35)" }}>
+                        <Icon size={15} />
+                    </span>
+                )}
+                <input
+                    {...props}
+                    className={`w-full py-2.5 rounded-xl text-[13px] outline-none border ${Icon ? "pl-10" : "pl-3.5"} ${rightSlot ? "pr-10" : "pr-3.5"} ${className}`}
+                    style={{
+                        background: "rgba(255,255,255,0.06)",
+                        borderColor: error ? "rgba(248,113,113,0.5)" : "rgba(255,255,255,0.1)",
+                        color: "#ffffff",
+                    }}
+                />
+                {rightSlot && (
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2">{rightSlot}</span>
+                )}
+            </div>
+            {error && <p className="mt-1 text-[11px]" style={{ color: "#fca5a5" }}>{error}</p>}
         </div>
     );
 }
@@ -142,9 +186,27 @@ function LoginForm() {
 
     useEffect(() => {
         const oauthError = searchParams.get("oauthError");
-        if (!oauthError) return;
-        setIsError(true);
-        setServerMessage(oauthError);
+        const logoutType = searchParams.get("logout");
+        const sessionExpired = searchParams.get("reason") === "session-expired";
+        const storedNotice = sessionStorage.getItem("cf_auth_notice");
+
+        if (oauthError) {
+            setIsError(true);
+            setServerMessage(oauthError);
+            return;
+        }
+
+        if (logoutType || sessionExpired || storedNotice) {
+            setIsError(false);
+            setServerMessage(
+                logoutType === "all"
+                    ? "Logged out successfully from all devices. Please sign in again."
+                    : logoutType === "current"
+                        ? "Logged out successfully. Please sign in again."
+                        : (storedNotice || "Your session has ended. Please sign in again.")
+            );
+            sessionStorage.removeItem("cf_auth_notice");
+        }
     }, [searchParams]);
 
     const countdown = useCountdown(countdownStart, () => {
@@ -211,14 +273,11 @@ function LoginForm() {
 
         try {
             setLoading(true);
-            // ? FIX Ã¢â‚¬â€ generateFingerprint() ab async hai (SHA-256 ke liye
-            // crypto.subtle.digest use karta hai, jo Promise return karta hai).
-            // Pehle yahan `await` missing tha, isliye `fingerprint` ek Promise
-            // object ban jaata tha, plain hex string nahi. JSON.stringify karne
-            // par woh Promise `{}` jaisa serialize ho jaata tha, aur backend ka
-            // Jackson deserializer LoginRequest.fingerprint (String type) ke
-            // against object dekh ke fail ho jaata tha Ã¢â‚¬â€ isi se "Request body
-            // is invalid or malformed" error aa raha tha.
+            // FIX — generateFingerprint() is async (uses crypto.subtle.digest
+            // for SHA-256, which returns a Promise). `await` was missing here
+            // before, so `fingerprint` ended up as a Promise object instead
+            // of a plain hex string, which serialized to `{}` and broke the
+            // backend's LoginRequest.fingerprint (String) deserialization.
             const fingerprint = await generateFingerprint();
             const response = await loginUser(email, password, fingerprint);
             login(response);
@@ -263,56 +322,86 @@ function LoginForm() {
     }
 
     return (
-        <div className="relative flex min-h-full w-full items-center justify-center overflow-y-auto bg-[#0a0713] px-4 py-6 md:px-8">
+        // Fills whatever space the parent layout gives it (the other column
+        // is AuthLeftPanel, rendered by the parent — not here). No blur, no
+        // backdrop-filter: those are the expensive bits that were causing
+        // the lag, especially doubled up with the duplicate panel.
+        <div
+            className="flex min-h-[100dvh] w-full items-center justify-center px-4 py-4 md:px-7"
+            style={{ background: "#07060e" }}
+        >
+            <div className="w-full max-w-[380px]">
 
+                <div className="flex items-center gap-2 mb-4 lg:hidden">
+                    <span
+                        className="grid h-8 w-8 place-items-center rounded-lg"
+                        style={{ background: "linear-gradient(135deg, #fbbf24, #d946ef 55%, #7c3aed)" }}
+                    >
+                        <Lock size={14} color="#ffffff" strokeWidth={2.5} />
+                    </span>
+                    <span className="font-black text-[14px] tracking-tight" style={{ color: "#ffffff" }}>CareerForge AI</span>
+                </div>
 
-            <div className="relative w-full max-w-[430px]">
-                <div className="relative rounded-[22px] border border-white/10 bg-white/[0.065] p-6 shadow-[0_24px_80px_-30px_rgba(0,0,0,0.85)] backdrop-blur-xl md:p-7">
-
-                    {/* Icon badge Ã¢â‚¬â€ solid pulse via CSS animation, no JS */}
-                    <div className={`mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-fuchsia-500 to-violet-600 shadow-[0_8px_20px_-4px_rgba(255,107,74,0.5)] ${loading ? "animate-pulse" : ""}`}>
-                        <Lock size={20} className="text-white" />
+                <div
+                    className="relative rounded-2xl p-5 sm:p-6"
+                    style={{
+                        background: "linear-gradient(155deg,#151225,#0e111b)",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                    }}
+                >
+                    <div
+                        className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl"
+                        style={{ background: "linear-gradient(135deg, #fbbf24, #d946ef 55%, #7c3aed)" }}
+                    >
+                        <Lock size={18} color="#ffffff" />
                     </div>
 
                     <div className="flex items-center gap-2 mb-1">
-                        <Sparkles size={13} className="text-amber-200" />
-                        <span className="text-[11px] font-bold uppercase tracking-widest text-amber-200">CareerForge AI</span>
+                        <Sparkles size={12} color="#fde68a" />
+                        <span className="text-[10.5px] font-bold uppercase tracking-widest" style={{ color: "#fde68a" }}>
+                            CareerForge AI
+                        </span>
                     </div>
-                    <h1 className="text-[28px] font-black text-white tracking-tight">Welcome back</h1>
-                    <p className="text-white/62 text-[13px] mt-1.5">Continue your chats, credits, and AI workspace</p>
+                    <h1 className="text-[21px] font-black tracking-tight" style={{ color: "#ffffff" }}>Welcome back</h1>
+                    <p className="text-[12px] mt-1 mb-5" style={{ color: "rgba(255,255,255,0.6)" }}>
+                        Continue your chats, credits, and AI workspace
+                    </p>
 
-                    <form onSubmit={handleSubmit} className="space-y-3 mt-8">
+                    <form onSubmit={handleSubmit} className="space-y-3.5">
 
-                        <input
+                        <FieldInput
+                            label="Email"
+                            icon={Mail}
                             type="email"
                             placeholder="you@example.com"
                             value={email}
                             disabled={loading}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full px-4 py-3.5 rounded-xl bg-[var(--surface-soft)] border border-[var(--border-soft)] text-white text-[14px] placeholder:text-white/35 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/25 transition-colors duration-150 disabled:opacity-60"
                         />
 
-                        <div className="relative">
-                            <input
-                                type={showPassword ? "text" : "password"}
-                                placeholder="Enter your password"
-                                value={password}
-                                disabled={loading}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full px-4 py-3.5 pr-12 rounded-xl bg-[var(--surface-soft)] border border-[var(--border-soft)] text-white text-[14px] placeholder:text-white/35 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/25 transition-colors duration-150 disabled:opacity-60"
-                            />
-                            <button
-                                type="button"
-                                disabled={loading}
-                                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/62 hover:text-white transition-colors duration-150 disabled:opacity-40"
-                                onClick={() => setShowPassword(!showPassword)}
-                            >
-                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </button>
-                        </div>
+                        <FieldInput
+                            label="Password"
+                            icon={Lock}
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Enter your password"
+                            value={password}
+                            disabled={loading}
+                            onChange={(e) => setPassword(e.target.value)}
+                            rightSlot={
+                                <button
+                                    type="button"
+                                    disabled={loading}
+                                    style={{ color: "rgba(255,255,255,0.4)" }}
+                                    className="disabled:opacity-40"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                >
+                                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                                </button>
+                            }
+                        />
 
-                        <div className="flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center pt-1">
-                            <label className="flex items-center gap-2.5 cursor-pointer group">
+                        <div className="flex flex-col sm:flex-row gap-2.5 sm:justify-between sm:items-center pt-0.5">
+                            <label className="flex items-center gap-2 cursor-pointer">
                                 <div className="relative">
                                     <input
                                         type="checkbox"
@@ -321,21 +410,28 @@ function LoginForm() {
                                         onChange={(e) => setRememberMe(e.target.checked)}
                                         className="peer sr-only"
                                     />
-                                    <div className="w-4.5 h-4.5 rounded-md border border-[var(--border-soft)] bg-[var(--surface-soft)] peer-checked:bg-violet-500 peer-checked:border-violet-500 transition-colors duration-150 flex items-center justify-center">
+                                    <div
+                                        className="w-4 h-4 rounded-[5px] flex items-center justify-center"
+                                        style={{
+                                            background: rememberMe ? "linear-gradient(135deg, #a78bfa, #fbbf24)" : "rgba(255,255,255,0.06)",
+                                            border: rememberMe ? "1px solid transparent" : "1px solid rgba(255,255,255,0.15)",
+                                        }}
+                                    >
                                         {rememberMe && (
-                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5">
+                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="3.5">
                                                 <polyline points="20 6 9 17 4 12" />
                                             </svg>
                                         )}
                                     </div>
                                 </div>
-                                <span className="text-white/62 text-[13px] group-hover:text-white transition-colors">
+                                <span className="text-[12px]" style={{ color: "rgba(255,255,255,0.55)" }}>
                                     Remember me
                                 </span>
                             </label>
                             <Link
                                 to="/forgot-password"
-                                className="text-amber-200 hover:text-white text-[13px] font-medium transition-colors"
+                                className="text-[12px] font-semibold"
+                                style={{ color: "#fde68a" }}
                             >
                                 Forgot Password?
                             </Link>
@@ -347,7 +443,11 @@ function LoginForm() {
 
                         <button
                             disabled={loading || countdown > 0}
-                            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-400 via-fuchsia-500 to-violet-600 text-white text-[14px] font-bold tracking-tight shadow-[0_14px_30px_-12px_rgba(217,70,239,0.8)] hover:shadow-[0_18px_36px_-12px_rgba(245,158,11,0.55)] active:scale-[0.99] transition-all duration-150 disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="w-full py-3 rounded-xl text-[13.5px] font-black tracking-tight disabled:opacity-40 disabled:cursor-not-allowed"
+                            style={{
+                                background: "linear-gradient(135deg, #fbbf24, #d946ef 55%, #7c3aed)",
+                                color: "#ffffff",
+                            }}
                         >
                             {loading ? (
                                 <span className="flex items-center justify-center gap-2">
@@ -359,7 +459,7 @@ function LoginForm() {
                                 </span>
                             ) : countdown > 0 ? (
                                 <span className="flex items-center justify-center gap-2">
-                                    <Clock size={15} />
+                                    <Clock size={14} />
                                     Try again in {countdown}s
                                 </span>
                             ) : (
@@ -376,16 +476,17 @@ function LoginForm() {
                         />
 
                         {showResendVerification && (
-                            <div className="p-4 rounded-xl bg-[var(--surface-soft)] border border-[var(--border-soft)] text-center">
-                                <p className="text-white/62 text-[13px]">Email not verified?</p>
+                            <div className="p-3.5 rounded-xl text-center" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                                <p className="text-[12px]" style={{ color: "rgba(255,255,255,0.6)" }}>Email not verified?</p>
                                 <button
                                     type="button"
                                     onClick={handleResendVerification}
                                     disabled={resendSeconds > 0}
-                                    className="mt-2 text-[13px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 mx-auto text-amber-200 hover:text-white disabled:text-white/62"
+                                    className="mt-1.5 text-[12px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 mx-auto"
+                                    style={{ color: resendSeconds > 0 ? "rgba(255,255,255,0.6)" : "#fde68a" }}
                                 >
                                     {resendSeconds > 0 ? (
-                                        <><Clock size={13} /> Resend in {resendSeconds}s</>
+                                        <><Clock size={12} /> Resend in {resendSeconds}s</>
                                     ) : (
                                         "Resend Verification Link"
                                     )}
@@ -394,20 +495,17 @@ function LoginForm() {
                         )}
                     </form>
 
-                    <div className="my-6 flex items-center gap-3">
-                        <div className="flex-1 h-px bg-[var(--border-soft)]" />
-                        <p className="text-white/62 text-xs font-medium tracking-wide">OR CONTINUE WITH</p>
-                        <div className="flex-1 h-px bg-[var(--border-soft)]" />
+                    <div className="my-4 flex items-center gap-3">
+                        <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.1)" }} />
+                        <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>OR</p>
+                        <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.1)" }} />
                     </div>
 
                     <SocialLogin />
 
-                    <p className="text-white/62 mt-8 text-center text-[13px]">
+                    <p className="text-center mt-4 text-[12px]" style={{ color: "rgba(255,255,255,0.55)" }}>
                         Don't have an account?{" "}
-                        <Link
-                            to="/register"
-                            className="text-amber-200 ml-1 hover:text-white font-semibold transition-colors"
-                        >
+                        <Link to="/register" className="ml-1 font-semibold" style={{ color: "#fde68a" }}>
                             Create Account
                         </Link>
                     </p>

@@ -16,15 +16,31 @@ function SocialLogin() {
 
   const disabled = Boolean(loadingProvider);
 
+  // Colors via inline style — this project's Tailwind build doesn't compile
+  // arbitrary opacity classes like `from-white/[0.08]`, so those rendered as
+  // transparent, which made both buttons effectively invisible on a light
+  // background. Plain rgba() inline styles always work regardless of the
+  // Tailwind config, so buttons stay visible and dark reliably.
+  const baseButtonStyle = {
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    color: "#ffffff",
+  };
+
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <button
         type="button"
         disabled={disabled}
         onClick={() => startOAuthLogin("google")}
-        className="flex min-h-11 items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-gradient-to-r from-white/[0.08] to-amber-400/[0.12] px-4 py-2.5 text-white shadow-[0_10px_28px_-18px_rgba(245,158,11,0.9)] transition-all duration-150 hover:-translate-y-0.5 hover:border-amber-300/55 disabled:translate-y-0 disabled:cursor-wait disabled:opacity-70"
+        style={baseButtonStyle}
+        className="flex min-h-11 items-center justify-center gap-2.5 rounded-xl px-4 py-2.5 transition-opacity duration-150 hover:opacity-90 disabled:cursor-wait disabled:opacity-50"
       >
-        {loadingProvider === "google" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FaGoogle className="h-4 w-4 text-orange-500" />}
+        {loadingProvider === "google" ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <FaGoogle className="h-4 w-4" style={{ color: "#f97316" }} />
+        )}
         <span className="text-[13px] font-bold">Google</span>
       </button>
 
@@ -32,9 +48,14 @@ function SocialLogin() {
         type="button"
         disabled={disabled}
         onClick={() => startOAuthLogin("github")}
-        className="flex min-h-11 items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-gradient-to-r from-white/[0.08] to-violet-500/[0.14] px-4 py-2.5 text-white shadow-[0_10px_28px_-18px_rgba(124,58,237,1)] transition-all duration-150 hover:-translate-y-0.5 hover:border-violet-300/60 disabled:translate-y-0 disabled:cursor-wait disabled:opacity-70"
+        style={baseButtonStyle}
+        className="flex min-h-11 items-center justify-center gap-2.5 rounded-xl px-4 py-2.5 transition-opacity duration-150 hover:opacity-90 disabled:cursor-wait disabled:opacity-50"
       >
-        {loadingProvider === "github" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FaGithub className="h-4 w-4" />}
+        {loadingProvider === "github" ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <FaGithub className="h-4 w-4" style={{ color: "#ffffff" }} />
+        )}
         <span className="text-[13px] font-bold">GitHub</span>
       </button>
     </div>

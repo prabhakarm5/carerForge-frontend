@@ -1,5 +1,5 @@
 import { Navigate } from "react-router-dom";
-import { Loader2, WifiOff } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import useAuthStore from "../store/authStore";
 
@@ -15,18 +15,6 @@ function ProtectedRoute({ children }) {
                     <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#ff6b4a]" />
                     <p className="mt-4 text-sm font-bold text-[var(--text-primary)]">Checking your secure session</p>
                     <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">This usually takes a moment.</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (backendUnreachable && isAuthenticated) {
-        return (
-            <div className="grid min-h-[55vh] place-items-center px-5">
-                <div className="w-full max-w-sm rounded-2xl border border-amber-400/25 bg-amber-400/10 p-6 text-center">
-                    <WifiOff className="mx-auto h-6 w-6 text-amber-400" />
-                    <p className="mt-4 text-sm font-bold text-[var(--text-primary)]">Backend is reconnecting</p>
-                    <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">Your login is kept locally. Start the backend server and this page will recover.</p>
                 </div>
             </div>
         );

@@ -753,7 +753,7 @@ export default function ProfilePage() {
     try {
       all ? await logoutEverywhere() : await logoutCurrentDevice();
       toast.success(all ? "Signed out everywhere" : "Signed out");
-      navigate("/");
+      navigate(all ? "/login?logout=all" : "/login?logout=current", { replace: true });
     } catch {
       toast.error("Logout failed");
       setLoggingOut(false);

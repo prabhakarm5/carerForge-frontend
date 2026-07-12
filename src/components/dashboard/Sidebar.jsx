@@ -19,7 +19,6 @@ import RechargeModal from "../common/recharge/RechargeModal";
 const SEARCH_DEBOUNCE_MS = 300;
 const SIDEBAR_STORAGE_KEY = "sidebar_expanded";
 const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
-const POLL_INTERVAL_MS = 8000; // silent background refresh — ChatGPT/Claude jaisa live update
 const REFRESH_EVENT = "cf:conversations:refresh";
 
 // ✅ NEW — Kahin bhi app mein (Chat page pe naya chat banne ke baad, ya
@@ -455,7 +454,7 @@ const ChatRow = memo(function ChatRow({
 /* ══════════════════════════════════════════════════════════════════
    SIDEBAR
    ══════════════════════════════════════════════════════════════════ */
-function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
+function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refreshWallet }) {
   const location = useLocation();
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
@@ -469,8 +468,6 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-
-  const [wallet, setWallet] = useState(null);
 
   const [inputValue, setInputValue] = useState("");
   const [activeQuery, setActiveQuery] = useState("");
@@ -487,21 +484,12 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
   const debounceTimer = useRef(null);
   const accountBtnRef = useRef(null);
 
-  const loadWallet = useCallback(async () => {
-    try {
-      const data = await getWallet();
-      setWallet(data);
-    } catch {
-      // silent
-    }
-  }, []);
-
   useEffect(() => {
     try { localStorage.setItem(SIDEBAR_STORAGE_KEY, expanded ? "1" : "0"); } catch { /* ignore */ }
     onExpandedChange?.(expanded);
   }, [expanded]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { loadConversations(""); loadWallet(); return () => clearTimeout(debounceTimer.current); }, [loadWallet]);
+  useEffect(() => { loadConversations(""); return () => clearTimeout(debounceTimer.current); }, []);
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ✅ NEW — bina refresh kiye list update: jab bhi koi doosri jagah se
@@ -521,10 +509,6 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
 
     window.addEventListener(REFRESH_EVENT, silentRefresh);
 
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible") silentRefresh();
-    }, POLL_INTERVAL_MS);
-
     function onVisibilityChange() {
       if (document.visibilityState === "visible") silentRefresh();
     }
@@ -532,7 +516,6 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
 
     return () => {
       window.removeEventListener(REFRESH_EVENT, silentRefresh);
-      clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [editingId, confirmDeleteId, openMenuId, activeQuery]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -581,14 +564,14 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
     await logoutCurrentDevice();
     toast.success("Logged out from this device");
     setShowLogoutModal(false);
-    navigate("/");
+    navigate("/login?logout=current", { replace: true });
   }
 
   async function handleLogoutAll() {
     await logoutEverywhere();
     toast.success("Logged out from all devices");
     setShowLogoutModal(false);
-    navigate("/");
+    navigate("/login?logout=all", { replace: true });
   }
 
   const startRename = useCallback((chat) => { setOpenMenuId(null); setEditingId(chat.id); setEditValue(chat.title); }, []);
@@ -636,7 +619,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
   // 260px full-desktop-width leta tha jo chhoti screen pe bahut bada
   // lagta tha. Ab mobile drawer sirf 82% (max 300px) leta hai, background
   // content thoda peek hota hai — modern drawer jaisa feel.
-  const mobileWidthClass = "w-[82%] max-w-[300px]";
+  const mobileWidthClass = "w-[calc(100vw-46px)] max-w-[320px]";
   const desktopWidthClass = isExpanded ? "lg:w-[260px]" : "lg:w-[60px]";
 
   const planInfo = useMemo(() => getPlanInfo(wallet?.currentPlanName), [wallet?.currentPlanName]);
@@ -648,7 +631,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
       )}
 
       <aside
-        className={`fixed left-0 top-0 h-screen z-50 flex flex-col ${mobileWidthClass} ${desktopWidthClass} ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
+        className={`fixed left-0 top-0 h-[100dvh] z-50 flex flex-col ${mobileWidthClass} ${desktopWidthClass} ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
         style={{
           background: "linear-gradient(180deg,#1c1c22,#17171b)",
           borderRight: "1px solid rgba(255,255,255,0.06)",
@@ -912,7 +895,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange }) {
         reason="tokens"
         onClose={() => setShowPlansModal(false)}
         currentPlanId={wallet?.currentPlanId}
-        onActivated={loadWallet}
+        onActivated={refreshWallet}
       />
 
       <style>{`

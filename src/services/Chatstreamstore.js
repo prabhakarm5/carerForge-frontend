@@ -6,6 +6,8 @@ import useConversationListStore from "../store/conversationListStore";
 
 function defaultStreamEntry(controller) {
     return {
+        // Unique per generated answer; one conversation can have many streams.
+        streamId: Date.now() + "-" + Math.random().toString(36).slice(2),
         text: "",
         done: false,
         waiting: true,
@@ -34,7 +36,7 @@ function getCsrfTokenFromCookie() {
 // stutter under long responses looks like. Batching flushes to a fixed
 // interval cuts the number of full re-parses by ~3-4x while still
 // reading as smooth, continuous typing to the user.
-const FLUSH_INTERVAL_MS = 110;
+const FLUSH_INTERVAL_MS = 100;
 
 const useChatStreamStore = create((set, get) => ({
     streamsById: {},
@@ -278,6 +280,7 @@ const useChatStreamStore = create((set, get) => ({
                         message,
                         model: model || null,
                         image: image || null,
+                        responseStyle: localStorage.getItem("cf_response_style") || "concise",
                     }),
                     signal: controller.signal,
                 });
@@ -298,6 +301,7 @@ const useChatStreamStore = create((set, get) => ({
                             message,
                             model: model || null,
                             image: image || null,
+                        responseStyle: localStorage.getItem("cf_response_style") || "concise",
                         }),
                         signal: controller.signal,
                     });

@@ -44,6 +44,12 @@ export async function getConversation(conversationId) {
     return response.data;
 }
 
+export async function getConversationStatus(conversationId) {
+    const response = await axiosInstance.get(
+        API_BASE_URL + "/api/conversations/" + conversationId + "/status"
+    );
+    return response.data;
+}
 // ================= GET RECENT =================
 
 export async function getRecentChats() {

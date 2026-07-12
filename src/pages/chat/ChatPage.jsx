@@ -1,17 +1,20 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { memo, useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useOutletContext, Link } from "react-router-dom";
 import {
-  Send, Sparkles, Copy, Check, RotateCcw,
+  Sparkles, Copy, Check, RotateCcw,
   Code, Lightbulb, PenLine, ArrowDown,
-  Image as ImageIcon, FileText, StopCircle,
+  Image as ImageIcon, FileText,
   Zap, Globe, BookOpen, AlertTriangle, X,
   Maximize2, Download, ChevronLeft, ChevronDown,
-  Paperclip, Eye, EyeOff, Search,
+  Eye, EyeOff, Search, ThumbsUp, ThumbsDown,
 } from "lucide-react";
-import { getConversation, getModels } from "../../services/conversationService";
+import { getConversation, getConversationStatus, getModels } from "../../services/conversationService";
 import { handleApiError } from "../../utils/errorHandler";
 import RechargeModal from "../../components/common/recharge/RechargeModal";
 import useChatStreamStore from "../../services/Chatstreamstore";
+import ChatComposer from "./components/ChatComposer";
+import RichInlineText from "./components/RichInlineText";
+import ArtifactPanel from "./components/ArtifactPanel";
 import { notifyConversationsChanged } from "../../components/dashboard/Sidebar";
 
 // ─── Config ──────────────────────────────────────────────────────────────
@@ -268,28 +271,7 @@ function parseContent(raw) {
 
 // ─── Inline text (bold / inline-code) ────────────────────────────────────
 function InlineText({ text }) {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
-  return (
-    <>
-      {parts.map((p, i) => {
-        if (p.startsWith("**") && p.endsWith("**"))
-          return <strong key={i} className="text-white/90 font-semibold">{p.slice(2, -2)}</strong>;
-        if (p.startsWith("`") && p.endsWith("`"))
-          return (
-            <code key={i} style={{
-              padding: "1px 6px", borderRadius: 5,
-              background: "rgba(139,92,246,0.15)",
-              color: "#c4b5fd", fontSize: "0.82em",
-              fontFamily: "'JetBrains Mono',monospace",
-              border: "1px solid rgba(139,92,246,0.2)",
-            }}>
-              {p.slice(1, -1)}
-            </code>
-          );
-        return <span key={i}>{p}</span>;
-      })}
-    </>
-  );
+  return <RichInlineText text={text} />;
 }
 
 function downloadAsFile(content, filename) {
@@ -318,7 +300,7 @@ function slugify(text) {
 }
 
 // ─── Code Block (inline, inside a chat message) ──────────────────────────
-function CodeBlock({ lang, content, onOpenPanel }) {
+function CodeBlock({ lang, content, onOpenPanel, isStreaming = false }) {
   const [copied, setCopied] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const color = LANG_COLORS[lang.toLowerCase()] || "#94a3b8";
@@ -424,7 +406,7 @@ function CodeBlock({ lang, content, onOpenPanel }) {
         lineHeight: 1.7,
         maxHeight: 420,
       }}>
-        <code><HighlightedCode code={content} lang={lang} /></code>
+        <code>{isStreaming ? content : <HighlightedCode code={content} lang={lang} />}</code>
       </pre>
     </div>
   );
@@ -444,14 +426,13 @@ function ArtifactCard({ artifact, onOpenPanel }) {
             <Code size={14} /> HTML artifact
           </div>
           <p style={{ margin: "7px 0 0", color: "#e2e8f0", fontSize: 14, fontWeight: 700 }}>{artifact.label || "Generated preview"}</p>
-          <p style={{ margin: "3px 0 0", color: "#64748b", fontSize: 12 }}>Open the side panel to preview or download.</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <button
             onClick={() => onOpenPanel?.({ lang: artifact.lang, content: artifact.content })}
             style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 10, border: "1px solid rgba(139,92,246,0.35)", background: "rgba(139,92,246,0.18)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
           >
-            <Eye size={13} /> Preview
+            <Maximize2 size={13} /> Open
           </button>
           <button
             onClick={() => downloadSnippet(artifact.content, artifact.lang)}
@@ -496,7 +477,7 @@ function TableBlock({ header, rows }) {
 }
 
 // ─── Rendered Message ────────────────────────────────────────────────────
-function RenderedMessage({ content, onOpenPanel }) {
+function RenderedMessage({ content, onOpenPanel, isStreaming = false }) {
   const blocks = useMemo(() => parseContent(content), [content]);
   let listBuffer = [];
   let listType = null;
@@ -542,7 +523,7 @@ function RenderedMessage({ content, onOpenPanel }) {
     if (b.type === "artifact") {
       rendered.push(<ArtifactCard key={i} artifact={b} onOpenPanel={onOpenPanel} />);
     } else if (b.type === "code") {
-      rendered.push(<CodeBlock key={i} lang={b.lang} content={b.content} onOpenPanel={onOpenPanel} />);
+      rendered.push(<CodeBlock key={i} lang={b.lang} content={b.content} onOpenPanel={onOpenPanel} isStreaming={isStreaming} />);
     } else if (b.type === "table") {
       rendered.push(<TableBlock key={i} header={b.header} rows={b.rows} />);
     } else if (b.type === "quote") {
@@ -672,14 +653,23 @@ function ThoughtTrail({ thoughts, streaming }) {
 
 // ─── Message Row ──────────────────────────────────────────────────────────
 const LONG_DOC_THRESHOLD = 1400;
+const ATTACHMENT_PATTERN = /^\[\[ATTACHMENT:([^\]]+)\]\]\n([\s\S]*?)\n\[\[\/ATTACHMENT\]\]\n?([\s\S]*)$/;
 
-function MessageRow({ role, content, image, isStreaming = false, onOpenPanel }) {
-  const [hovered, setHovered] = useState(false);
+function parseTextAttachment(content = "") {
+  const match = content.match(ATTACHMENT_PATTERN);
+  if (!match) return null;
+  return { name: match[1], fileContent: match[2], note: match[3]?.trim() || "" };
+}
+
+const MessageRow = memo(function MessageRow({ role, content, image, isStreaming = false, onOpenPanel, onRetry }) {
   const [downloaded, setDownloaded] = useState(false);
+  const [feedback, setFeedback] = useState(null);
   const isUser = role === "USER" || role === "user";
+  const textAttachment = isUser ? parseTextAttachment(content) : null;
+  const visibleUserText = textAttachment ? textAttachment.note : content;
 
   const plainLength = useMemo(
-    () => (content || "").replace(/```[\s\S]*?```/g, "").length,
+    () => (content || "").replace(/~~~[\s\S]*?~~~/g, "").length,
     [content]
   );
   const isLongDoc = !isUser && !isStreaming && plainLength > LONG_DOC_THRESHOLD;
@@ -687,67 +677,70 @@ function MessageRow({ role, content, image, isStreaming = false, onOpenPanel }) 
   if (isUser) {
     return (
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, maxWidth: "min(80%, 560px)" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, maxWidth: "min(88%, 680px)" }}>
           {image && (
             <img src={image} alt="attached" style={{
-              maxWidth: 220, maxHeight: 220, borderRadius: 14,
+              maxWidth: 220, maxHeight: 220, borderRadius: 12,
               border: "1px solid rgba(255,255,255,0.12)", objectFit: "cover",
             }} />
           )}
-          {content && (
+
+          {textAttachment && (
             <div style={{
-              padding: "13px 18px",
-              borderRadius: "20px 20px 5px 20px",
+              minWidth: 210, maxWidth: "100%", padding: "10px 12px",
+              display: "flex", alignItems: "center", gap: 10,
+              borderRadius: 12, background: "rgba(255,255,255,0.07)",
+              border: "1px solid rgba(255,255,255,0.12)", color: "#e2e8f0",
+            }}>
+              <span style={{ width: 32, height: 32, borderRadius: 8, display: "grid", placeItems: "center", background: "rgba(56,189,248,0.14)", color: "#67e8f9", flexShrink: 0 }}>
+                <FileText size={16} />
+              </span>
+              <span style={{ minWidth: 0, display: "flex", flexDirection: "column" }}>
+                <strong style={{ fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{textAttachment.name}</strong>
+                <small style={{ color: "#7c8aa0", fontSize: 10.5 }}>{textAttachment.fileContent.length.toLocaleString()} characters</small>
+              </span>
+            </div>
+          )}
+
+          {visibleUserText && (
+            <div style={{
+              padding: "10px 14px",
+              borderRadius: "16px 16px 4px 16px",
               background: "linear-gradient(135deg,rgba(124,58,237,0.85),rgba(219,39,119,0.75))",
               border: "1px solid rgba(124,58,237,0.3)",
-              color: "#fff", fontSize: 15.3, lineHeight: 1.75,
+              color: "#fff", fontSize: 15, lineHeight: 1.65,
               whiteSpace: "pre-wrap", wordBreak: "break-word",
               boxShadow: "0 4px 20px rgba(124,58,237,0.2)",
             }}>
-              {content}
+              {visibleUserText}
             </div>
           )}
+
+          <div style={{ opacity: 0.72 }}>
+            <CopyBtn text={content} />
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{ display: "flex", gap: 12 }}
-    >
+    <div style={{ display: "flex", gap: 10 }}>
       <div style={{
-        width: 38, height: 38,
-        borderRadius: 13, flexShrink: 0, marginTop: 2,
+        width: 32, height: 32, borderRadius: 9, flexShrink: 0, marginTop: 2,
         background: "linear-gradient(135deg,#7c3aed,#db2777)",
         display: "flex", alignItems: "center", justifyContent: "center",
-        boxShadow: "0 4px 16px rgba(124,58,237,0.45)",
-        transition: "transform 0.15s ease",
+        boxShadow: "0 3px 12px rgba(124,58,237,0.35)",
       }}>
-        <Sparkles size={17} color="#fff" />
+        <Sparkles size={15} color="#fff" />
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, transition: "opacity 0.12s ease-out" }}>
-        {isStreaming ? (
-          <div style={{
-            whiteSpace: "pre-wrap",
-            overflowWrap: "anywhere",
-            fontSize: 15.3,
-            lineHeight: 1.85,
-            color: "#d3dbe8",
-            paddingTop: 1,
-          }}>
-            {content}
-          </div>
-        ) : (
-          <RenderedMessage content={content} onOpenPanel={onOpenPanel} />
-        )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <RenderedMessage content={content} onOpenPanel={onOpenPanel} isStreaming={isStreaming} />
 
         {isStreaming && (
           <span style={{
-            display: "inline-block", width: 2, height: "1.1em",
+            display: "inline-block", width: 2, height: "1.05em",
             background: "#a78bfa", marginLeft: 3,
             verticalAlign: "text-bottom", borderRadius: 2,
             animation: "cursorBlink 0.75s ease-in-out infinite",
@@ -755,8 +748,11 @@ function MessageRow({ role, content, image, isStreaming = false, onOpenPanel }) 
         )}
 
         {!isStreaming && content && (
-          <div style={{ marginTop: 6, marginLeft: -6, display: "flex", alignItems: "center", gap: 2, opacity: hovered ? 1 : 0, transition: "opacity 0.2s" }}>
+          <div style={{ marginTop: 5, marginLeft: -6, display: "flex", alignItems: "center", gap: 1, opacity: 0.7 }}>
             <CopyBtn text={content} />
+            <ActionBtn icon={ThumbsUp} doneIcon={ThumbsUp} label="Like" doneLabel="Liked" done={feedback === "up"} onClick={() => setFeedback(feedback === "up" ? null : "up")} />
+            <ActionBtn icon={ThumbsDown} doneIcon={ThumbsDown} label="Dislike" doneLabel="Disliked" done={feedback === "down"} onClick={() => setFeedback(feedback === "down" ? null : "down")} />
+            {onRetry && <ActionBtn icon={RotateCcw} label="Retry" onClick={onRetry} />}
             {isLongDoc && (
               <>
                 <span style={{ width: 1, height: 12, background: "rgba(255,255,255,0.08)" }} />
@@ -771,7 +767,7 @@ function MessageRow({ role, content, image, isStreaming = false, onOpenPanel }) 
                   done={downloaded}
                   onClick={() => {
                     const title = (content.split("\n").find(l => l.trim()) || "response").replace(/^#+\s*/, "");
-                    downloadAsFile(content, `${slugify(title)}.md`);
+                    downloadAsFile(content, slugify(title) + ".md");
                     setDownloaded(true);
                     setTimeout(() => setDownloaded(false), 1600);
                   }}
@@ -783,8 +779,7 @@ function MessageRow({ role, content, image, isStreaming = false, onOpenPanel }) 
       </div>
     </div>
   );
-}
-
+});
 // ─── Live Status Row ───────────────────────────────────────────────────
 function ThinkingRow({ label = "thinking" }) {
   const isGenerating = label === "generating";
@@ -1087,7 +1082,7 @@ function ModelSelector({ models, selectedId, onSelect, disabled, compact }) {
         disabled={disabled}
         style={{
           display: "flex", alignItems: "center", gap: 6,
-          padding: compact ? "5px 8px 5px 5px" : "5px 10px 5px 6px",
+          width: 30, height: 30, padding: 5, justifyContent: "center",
           borderRadius: 99,
           background: "rgba(255,255,255,0.05)",
           border: "1px solid rgba(255,255,255,0.1)",
@@ -1102,16 +1097,12 @@ function ModelSelector({ models, selectedId, onSelect, disabled, compact }) {
         title={current?.label}
       >
         <ModelAvatar label={current?.label} size={18} />
-        <span style={{ fontWeight: 700, maxWidth: compact ? 70 : 96, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {shortLabel(current?.label, compact ? 10 : 16)}
-        </span>
-        <ChevronDown size={12} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} />
       </button>
 
       {open && (
         <div style={{
           position: "absolute", bottom: "calc(100% + 8px)", left: 0,
-          width: 320,
+          width: "min(320px, calc(100vw - 20px))",
           maxHeight: "min(420px, 65vh)",
           display: "flex", flexDirection: "column",
           background: "#12161f",
@@ -1178,193 +1169,6 @@ function ModelSelector({ models, selectedId, onSelect, disabled, compact }) {
 }
 
 // ─── Artifact Panel (code / html / long-document side panel) ─────────────
-function ArtifactPanel({ panel, onClose, isMobile }) {
-  const [copied, setCopied] = useState(false);
-  const [downloaded, setDownloaded] = useState(false);
-  const isDocument = panel.kind === "document";
-  const [tab, setTab] = useState((panel.lang || "").toLowerCase() === "html" ? "preview" : "code");
-  const color = LANG_COLORS[panel.lang?.toLowerCase()] || "#94a3b8";
-  const canPreview = (panel.lang || "").toLowerCase() === "html";
-
-  function copy() {
-    navigator.clipboard.writeText(panel.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  function handleDownload() {
-    if (isDocument) {
-      downloadAsFile(panel.content, `${slugify(panel.title)}.md`);
-    } else {
-      downloadSnippet(panel.content, panel.lang);
-    }
-    setDownloaded(true);
-    setTimeout(() => setDownloaded(false), 1600);
-  }
-
-  const containerStyle = isMobile
-    ? {
-        position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000,
-        background: "#0d1117",
-        display: "flex", flexDirection: "column",
-        contain: "strict",
-        overscrollBehavior: "contain",
-        animation: "slideUp 0.2s cubic-bezier(0.22,1,0.36,1)",
-      }
-    : {
-        width: "clamp(440px, 42vw, 780px)",
-        flexShrink: 0,
-        height: "100%", position: "relative", zIndex: 10,
-        display: "flex", flexDirection: "column",
-        background: "#0d1117",
-        borderLeft: "1px solid rgba(255,255,255,0.08)",
-        boxShadow: "-8px 0 40px rgba(0,0,0,0.45)",
-        overflow: "hidden",
-        contain: "strict",
-        overscrollBehavior: "contain",
-        animation: "slideInRight 0.18s cubic-bezier(0.22,1,0.36,1)",
-      };
-
-  return (
-    <div style={containerStyle} onWheel={(e) => e.stopPropagation()}>
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: isMobile ? "14px 14px 14px 8px" : "10px 14px",
-        background: "rgba(255,255,255,0.03)",
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
-        flexShrink: 0,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 4 : 8, minWidth: 0 }}>
-          {isMobile && (
-            <button
-              onClick={onClose}
-              style={{
-                width: 32, height: 32, borderRadius: 8, border: "none",
-                background: "transparent", color: "#cbd5e1", cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0,
-              }}
-              title="Back to chat"
-            >
-              <ChevronLeft size={18} />
-            </button>
-          )}
-          {isDocument ? <FileText size={14} color="#64748b" style={{ flexShrink: 0 }} /> : <Code size={14} color="#64748b" style={{ flexShrink: 0 }} />}
-          <span style={{
-            fontSize: 12, fontWeight: 700,
-            color: isDocument ? "#e2e8f0" : color,
-            fontFamily: isDocument ? "inherit" : "monospace",
-            textTransform: isDocument ? "none" : "uppercase",
-            letterSpacing: isDocument ? "normal" : "0.08em",
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>
-            {isDocument ? (panel.title || "Document") : panel.lang}
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
-          {canPreview && !isDocument && (
-            <div style={{ display: "flex", padding: 3, borderRadius: 9, background: "rgba(255,255,255,0.05)", marginRight: 2 }}>
-              {["preview", "code"].map((item) => (
-                <button
-                  key={item}
-                  onClick={() => setTab(item)}
-                  style={{
-                    padding: "4px 8px", borderRadius: 7, border: "none",
-                    background: tab === item ? "rgba(124,58,237,0.28)" : "transparent",
-                    color: tab === item ? "#fff" : "#64748b",
-                    fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          )}
-          <button
-            onClick={handleDownload}
-            title="Download"
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 28, height: 28, borderRadius: 7, cursor: "pointer",
-              background: downloaded ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.05)",
-              border: `1px solid ${downloaded ? "rgba(74,222,128,0.25)" : "rgba(255,255,255,0.08)"}`,
-              color: downloaded ? "#4ade80" : "#64748b", transition: "color 0.15s",
-            }}
-          >
-            {downloaded ? <Check size={12} /> : <Download size={12} />}
-          </button>
-          <button
-            onClick={copy}
-            title="Copy"
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 28, height: 28, borderRadius: 7, cursor: "pointer",
-              background: copied ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.05)",
-              border: `1px solid ${copied ? "rgba(74,222,128,0.25)" : "rgba(255,255,255,0.08)"}`,
-              color: copied ? "#4ade80" : "#64748b", transition: "color 0.15s",
-            }}
-          >
-            {copied ? <Check size={12} /> : <Copy size={12} />}
-          </button>
-          {!isMobile && (
-            <button
-              onClick={onClose}
-              style={{
-                width: 28, height: 28, borderRadius: 7, border: "none",
-                background: "transparent", color: "#475569", cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "background-color 0.15s, color 0.15s",
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.color = "#94a3b8"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#475569"; }}
-              title="Close panel"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {isDocument ? (
-        <div
-          className="artifact-scroll"
-          style={{
-            flex: 1, overflowY: "auto", padding: "20px 22px",
-            overscrollBehavior: "contain", WebkitOverflowScrolling: "touch",
-          }}
-        >
-          <RenderedMessage content={panel.content} />
-        </div>
-      ) : canPreview && tab === "preview" ? (
-        <div style={{ flex: 1, background: "#fff" }}>
-          <iframe
-            title="artifact-preview"
-            srcDoc={panel.content}
-            sandbox="allow-scripts allow-forms allow-popups allow-modals"
-            style={{ width: "100%", height: "100%", border: "none" }}
-          />
-        </div>
-      ) : (
-        <pre
-          className="artifact-scroll"
-          style={{
-            flex: 1, overflow: "auto", margin: 0,
-            padding: "16px 16px",
-            fontSize: 12.5, lineHeight: 1.7,
-            fontFamily: "'JetBrains Mono','Fira Code',monospace",
-            whiteSpace: "pre",
-            overscrollBehavior: "contain",
-            WebkitOverflowScrolling: "touch",
-          }}
-        >
-          <code><HighlightedCode code={panel.content} lang={panel.lang} /></code>
-        </pre>
-      )}
-    </div>
-  );
-}
-
 // ─── Main ChatPage ─────────────────────────────────────────────────────────
 export default function ChatPage() {
   const { id }        = useParams();
@@ -1390,6 +1194,7 @@ export default function ChatPage() {
   const modelSupportsVision = !!currentModel?.vision;
 
   const [attachedImage, setAttachedImage] = useState(null);
+  const [attachedText, setAttachedText] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -1505,21 +1310,11 @@ export default function ChatPage() {
   // Writing scrollTop on a single element is also far cheaper (no forced
   // layout of ancestors), which matters a lot during streaming when this
   // can fire many times per second.
-  const rafRef = useRef(null);
-  useEffect(() => {
-    if (!isAtBottomRef.current) return;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(() => {
-      const el = scrollRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    });
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [liveStream?.text, liveStream?.thoughts, messages.length]);
-
+  // The main chat viewport never auto-scrolls while an answer streams.
   useEffect(() => {
     if (!liveStream || !liveStream.done) return;
-    if (committedRef.current.has(streamKey)) return;
-    committedRef.current.add(streamKey);
+    if (committedRef.current.has(liveStream.streamId)) return;
+    committedRef.current.add(liveStream.streamId);
 
     if (liveStream.text) {
       setMessages(prev => {
@@ -1607,6 +1402,33 @@ export default function ChatPage() {
   // Claude-style behavior: if something finished while this tab was in the
   // background (or the device was asleep), catch up silently instead of
   // making the user hit refresh.
+  // A tiny status request keeps an open chat in sync with deletions made
+  // on another device without downloading the conversation again.
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+
+    async function checkConversation() {
+      if (document.visibilityState !== "visible" || isBusy) return;
+      try {
+        const result = await getConversationStatus(id);
+        if (!cancelled && result?.exists === false) {
+          localStorage.removeItem(CONV_CACHE_PREFIX + id);
+          notifyConversationsChanged();
+          navigate("/chat", { replace: true });
+        }
+      } catch (error) {
+        if (!cancelled && error?.response?.status === 404) {
+          localStorage.removeItem(CONV_CACHE_PREFIX + id);
+          notifyConversationsChanged();
+          navigate("/chat", { replace: true });
+        }
+      }
+    }
+
+    const timer = setInterval(checkConversation, 5000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [id, isBusy, navigate]);
   useEffect(() => {
     function onVisible() {
       if (document.visibilityState !== "visible" || !id || isBusy) return;
@@ -1661,26 +1483,30 @@ export default function ChatPage() {
     }
   }
 
-  function autoResize() {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 180) + "px";
-  }
-
   // ── Send ──────────────────────────────────────────────────────────────
   const handleSend = useCallback((textOverride) => {
     const text = (textOverride ?? input).trim();
-    if ((!text && !attachedImage) || isBusy) return;
+    const textFile = textOverride == null ? attachedText : null;
+    if ((!text && !attachedImage && !textFile) || isBusy) return;
+
+    const messageToSend = textFile
+      ? "[[ATTACHMENT:" + textFile.name + "]]\n" + textFile.content + "\n[[/ATTACHMENT]]\n" + text
+      : text;
 
     setErrorBanner(null);
-    setMessages(prev => [...prev, { role: "USER", content: text, image: attachedImage || undefined }]);
+    setMessages(prev => [...prev, {
+      role: "USER",
+      content: messageToSend,
+      image: attachedImage || undefined,
+    }]);
     setInput("");
     const imageToSend = attachedImage;
     setAttachedImage(null);
-    if (textareaRef.current) textareaRef.current.style.height = "auto";
-    isAtBottomRef.current = true;
-    setTimeout(scrollToBottom, 30);
+    setAttachedText(null);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.overflowY = "hidden";
+    }
 
     const key = id || tempKey;
     setActiveKey(key);
@@ -1688,7 +1514,7 @@ export default function ChatPage() {
     startStream({
       tempKey: key,
       conversationId: id || null,
-      message: text,
+      message: messageToSend,
       model: selectedModelId || undefined,
       image: modelSupportsVision ? imageToSend : undefined,
       onMeta: (meta) => {
@@ -1696,14 +1522,13 @@ export default function ChatPage() {
           skipLoadRef.current = true;
           skipActiveKeySyncRef.current = true;
           setActiveKey(meta.conversationId);
-          navigate(`/chat/${meta.conversationId}`, { replace: true });
-          notifyConversationsChanged(); 
+          navigate("/chat/" + meta.conversationId, { replace: true });
+          notifyConversationsChanged();
         }
       },
       onError: () => {},
     });
-  }, [id, input, isBusy, tempKey, startStream, navigate, attachedImage, selectedModelId, modelSupportsVision]);
-
+  }, [id, input, isBusy, tempKey, startStream, navigate, attachedImage, attachedText, selectedModelId, modelSupportsVision]);
   function handleStop() {
     stopStreamFn(streamKey);
   }
@@ -1720,9 +1545,9 @@ export default function ChatPage() {
 
   return (
     <div style={{
-      display: "flex", height: "calc(100dvh - 52px)",
+      display: "flex", height: "100%", minHeight: 0,
       background: "#050810", overflow: "hidden",
-      margin: "-24px", position: "relative",
+      margin: 0, position: "relative",
       overscrollBehavior: "none",
     }}>
       <style>{`
@@ -1749,6 +1574,37 @@ export default function ChatPage() {
         .model-scroll-list::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); border-radius: 999px; }
         .model-scroll-list::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.38); border-radius: 999px; }
         .model-scroll-list::-webkit-scrollbar-thumb:hover { background: rgba(167,139,250,0.62); }
+        .chat-composer-shell { width: 100%; min-width: 0; }
+        .chat-composer-attachments { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 2px 7px; }
+        .chat-text-attachment { min-width: 205px; max-width: 100%; height: 44px; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; background: rgba(14,165,233,.09); border: 1px solid rgba(56,189,248,.2); color: #dce8f5; }
+        .chat-text-file-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; background: rgba(56,189,248,.14); color: #67e8f9; flex: 0 0 auto; }
+        .chat-text-file-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+        .chat-text-file-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; }
+        .chat-text-file-copy small { color: #718096; font-size: 9.5px; }
+        .chat-composer-remove-text { width: 24px; height: 24px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 7px; background: transparent; color: #718096; cursor: pointer; }
+        .chat-composer-attachment { display: flex; align-items: center; gap: 10px; margin: 0 4px 8px; color: #8290a7; font-size: 11px; }
+        .chat-composer-thumb-wrap { position: relative; flex: 0 0 auto; }
+        .chat-composer-thumb { width: 46px; height: 46px; border-radius: 8px; object-fit: cover; border: 1px solid rgba(255,255,255,.14); }
+        .chat-composer-remove { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; padding: 0; border-radius: 50%; display: grid; place-items: center; color: #fff; background: #202838; border: 1px solid rgba(255,255,255,.16); cursor: pointer; }
+        .chat-composer-box { width: 100%; min-width: 0; padding: 7px 9px 6px; border: 1px solid rgba(255,255,255,.11); border-radius: 16px; background: linear-gradient(145deg,rgba(24,30,43,.98),rgba(12,16,26,.98)); box-shadow: 0 12px 32px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.035); transition: border-color .18s, box-shadow .18s; }
+        .chat-composer-box:focus-within { border-color: rgba(168,85,247,.52); box-shadow: 0 12px 36px rgba(0,0,0,.34), 0 0 0 3px rgba(168,85,247,.08); }
+        .chat-composer-input { display: block; width: 100%; min-width: 0; min-height: 32px; max-height: 112px; overflow-y: hidden; resize: none; padding: 4px 5px 7px; border: 0; outline: 0; background: transparent; color: #f8fafc; font: 400 15px/1.55 inherit; scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.3) transparent; }
+        .chat-composer-input::placeholder { color: #64748b; }
+        .chat-composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 34px; }
+        .chat-composer-tools { display: flex; align-items: center; gap: 5px; min-width: 0; }
+        .chat-composer-icon, .chat-composer-send { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; padding: 0; border-radius: 9px; cursor: pointer; color: #a9b5c8; border: 1px solid transparent; background: transparent; transition: transform .15s, background .15s, color .15s; }
+        .chat-composer-icon:hover:not(:disabled) { color: #fff; background: rgba(255,255,255,.07); }
+        .chat-composer-icon:disabled { color: #3d4758; cursor: not-allowed; }
+        .chat-composer-send { color: #fff; border-color: rgba(255,255,255,.12); background: linear-gradient(135deg,#7c3aed,#ec4899); box-shadow: 0 6px 18px rgba(168,85,247,.3); }
+        .chat-composer-send:hover:not(:disabled) { transform: translateY(-1px); }
+        .chat-composer-send:disabled { color: #465166; border-color: rgba(255,255,255,.05); background: rgba(255,255,255,.04); box-shadow: none; cursor: not-allowed; }
+        .chat-composer-stop { color: #fda4af; background: rgba(244,63,94,.12); border-color: rgba(244,63,94,.22); box-shadow: none; }
+        @media (max-width: 767px) {
+          .chat-composer-box { padding: 7px 8px; border-radius: 14px; }
+          .chat-composer-input { min-height: 30px; max-height: 78px; padding: 3px 4px 5px; font-size: 16px; line-height: 1.45; }
+          .chat-composer-toolbar { min-height: 32px; }
+          .chat-composer-icon, .chat-composer-send { width: 32px; height: 32px; flex-basis: 32px; border-radius: 8px; }
+        }
         .artifact-scroll { overscroll-behavior: contain; }
         .artifact-scroll::-webkit-scrollbar { width: 8px; }
         .artifact-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -1763,7 +1619,7 @@ export default function ChatPage() {
       }}>
 
         <div ref={scrollRef} className="chat-scroll-area" style={{ flex: "1 1 auto", overflowY: "auto", minHeight: 0 }}>
-          <div style={{ maxWidth: CONTENT_MAX_WIDTH, margin: "0 auto", padding: isMobile ? "16px 12px 18px" : "32px 20px 24px" }}>
+          <div style={{ maxWidth: CONTENT_MAX_WIDTH, margin: "0 auto", padding: isMobile ? "12px 10px 14px" : "28px 20px 24px" }}>
 
             {loadingHistory && (
               <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
@@ -1796,7 +1652,7 @@ export default function ChatPage() {
             )}
 
             {!loadingHistory && !historyError && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? 22 : 32 }}>
                 {messages.map((msg, i) => (
                   <div key={i} className="msg-block">
                     <MessageRow
@@ -1808,13 +1664,13 @@ export default function ChatPage() {
                   </div>
                 ))}
 
-                {liveStream?.thoughts?.length > 0 && !committedRef.current.has(streamKey) && (
-                  <div className="msg-block" style={{ marginLeft: 46 }}>
+                {liveStream?.thoughts?.length > 0 && !committedRef.current.has(liveStream?.streamId) && (
+                  <div className="msg-block" style={{ marginLeft: isMobile ? 0 : 46 }}>
                     <ThoughtTrail thoughts={liveStream.thoughts} streaming={!liveStream.done} />
                   </div>
                 )}
 
-                {liveStream && liveStream.text && !committedRef.current.has(streamKey) && (
+                {liveStream && liveStream.text && !committedRef.current.has(liveStream?.streamId) && (
                   <div className="msg-block">
                     <MessageRow
                       role="ASSISTANT"
@@ -1853,7 +1709,7 @@ export default function ChatPage() {
 
         {showScrollBtn && !showEmptyState && (
           <div style={{
-            position: "absolute", bottom: isMobile ? 92 : 84, left: "50%", transform: "translateX(-50%)",
+            position: "absolute", bottom: isMobile ? 78 : 84, left: "50%", transform: "translateX(-50%)",
             zIndex: 20, animation: "fadeUp 0.15s ease-out",
           }}>
             <button
@@ -1883,156 +1739,46 @@ export default function ChatPage() {
           borderTop: "1px solid rgba(255,255,255,0.05)",
           background: "rgba(5,8,16,0.97)",
           backdropFilter: "blur(20px)",
-          padding: isMobile ? "10px 10px 14px" : "14px 20px 16px",
+          padding: isMobile ? "6px 8px calc(7px + env(safe-area-inset-bottom))" : "12px 20px 14px",
         }}>
           <div style={{ maxWidth: CONTENT_MAX_WIDTH, margin: "0 auto" }}>
 
-            {attachedImage && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <div style={{ position: "relative" }}>
-                  <img src={attachedImage} alt="preview" style={{ width: 48, height: 48, borderRadius: 10, objectFit: "cover", border: "1px solid rgba(255,255,255,0.12)" }} />
-                  <button
-                    onClick={() => setAttachedImage(null)}
-                    style={{
-                      position: "absolute", top: -6, right: -6,
-                      width: 18, height: 18, borderRadius: "50%",
-                      background: "#1e293b", border: "1px solid rgba(255,255,255,0.15)",
-                      color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-                      cursor: "pointer", padding: 0,
-                    }}
-                  >
-                    <X size={11} />
-                  </button>
-                </div>
-                <span style={{ fontSize: 11, color: "#64748b" }}>Image attached — {currentModel?.label || "the model"} will read it</span>
-              </div>
-            )}
-
-            <div style={{
-              display: "flex", alignItems: "flex-end", gap: 9,
-              background: "rgba(255,255,255,0.045)",
-              border: "1px solid rgba(255,255,255,0.09)",
-              borderRadius: isMobile ? 18 : 22, padding: isMobile ? "8px 8px" : "11px 12px",
-              transition: "border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease",
-            }}
-              onFocusCapture={e => {
-                e.currentTarget.style.borderColor = "rgba(124,58,237,0.5)";
-                e.currentTarget.style.boxShadow   = "0 0 0 3px rgba(124,58,237,0.1)";
-              }}
-              onBlurCapture={e => {
-                e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
-                e.currentTarget.style.boxShadow   = "none";
-              }}
-            >
-              <ModelSelector
-                models={models}
-                selectedId={selectedModelId}
-                onSelect={setSelectedModelId}
-                disabled={isBusy}
-                compact={isMobile}
-              />
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handlePickImage}
-                style={{ display: "none" }}
-              />
-              <button
-                onClick={() => modelSupportsVision && fileInputRef.current?.click()}
-                disabled={!modelSupportsVision || isBusy}
-                title={modelSupportsVision ? "Attach an image" : "Selected model doesn't support images — pick a Vision model"}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 32, height: 32, borderRadius: 10, flexShrink: 0,
-                  background: "transparent",
-                  border: "none",
-                  color: modelSupportsVision ? "#94a3b8" : "#334155",
-                  cursor: modelSupportsVision ? "pointer" : "not-allowed",
-                  fontFamily: "inherit",
-                }}
-              >
-                <Paperclip size={15} />
-              </button>
-
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={e => { setInput(e.target.value); autoResize(); }}
-                onKeyDown={handleKeyDown}
-                placeholder="Message CareerForge AI…"
-                rows={1}
-                style={{
-                  flex: 1, background: "transparent", outline: "none", border: "none",
-                  fontSize: isMobile ? 16 : 15.3, color: "#fff", resize: "none", padding: isMobile ? "8px 2px" : "7px 3px",
-                  maxHeight: isMobile ? 120 : 180, fontFamily: "inherit", lineHeight: 1.65, minWidth: 0,
-                }}
-                className="placeholder:text-slate-600"
-              />
-
-              {isBusy ? (
-                <button
-                  onClick={handleStop}
-                  style={{
-                    width: 40, height: 40, borderRadius: 13, flexShrink: 0,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "rgba(255,255,255,0.07)",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    color: "#cbd5e1", cursor: "pointer",
-                    transition: "background-color 0.15s ease",
-                  }}
-                  title="Stop generating"
-                >
-                  <StopCircle size={17} />
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleSend()}
-                  disabled={!input.trim() && !attachedImage}
-                  style={{
-                    width: 40, height: 40, borderRadius: 13, flexShrink: 0,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: (input.trim() || attachedImage)
-                      ? "linear-gradient(135deg,#7c3aed,#db2777)"
-                      : "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.06)",
-                    color: (input.trim() || attachedImage) ? "#fff" : "#334155",
-                    cursor: (input.trim() || attachedImage) ? "pointer" : "not-allowed",
-                    boxShadow: (input.trim() || attachedImage) ? "0 6px 20px rgba(124,58,237,0.35)" : "none",
-                    transition: "background-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease",
-                  }}
-                  title="Send (Enter)"
-                >
-                  <Send size={15} style={{ transform: "translateX(1px) translateY(-1px)" }} />
-                </button>
-              )}
-            </div>
-
-            {!isMobile && (
-              <p style={{ textAlign: "center", fontSize: 11, color: "#1e293b", marginTop: 8, userSelect: "none" }}>
-                {modelSupportsVision ? "Text + Image supported" : "Text only · switch to a Vision model to attach images"} ·{" "}
-                <Link to="/image-generator" style={{ color: "#334155", textDecoration: "underline" }}
-                  onMouseEnter={e => e.currentTarget.style.color = "#a78bfa"}
-                  onMouseLeave={e => e.currentTarget.style.color = "#334155"}
-                >Image AI</Link>
-                {" "}· PDFs in{" "}
-                <Link to="/pdf-ai" style={{ color: "#334155", textDecoration: "underline" }}
-                  onMouseEnter={e => e.currentTarget.style.color = "#a78bfa"}
-                  onMouseLeave={e => e.currentTarget.style.color = "#334155"}
-                >PDF AI</Link>
-              </p>
-            )}
+            <ChatComposer
+              isMobile={isMobile}
+              input={input}
+              setInput={setInput}
+              textareaRef={textareaRef}
+              onKeyDown={handleKeyDown}
+              onSend={() => handleSend()}
+              onStop={handleStop}
+              isBusy={isBusy}
+              attachedImage={attachedImage}
+              setAttachedImage={setAttachedImage}
+              fileInputRef={fileInputRef}
+              onPickImage={handlePickImage}
+              modelSupportsVision={modelSupportsVision}
+              currentModel={currentModel}
+              modelSelector={
+                <ModelSelector
+                  models={models}
+                  selectedId={selectedModelId}
+                  onSelect={setSelectedModelId}
+                  disabled={isBusy}
+                  compact={isMobile}
+                />
+              }
+            />
           </div>
         </div>
       </div>
 
-      {/* ── ARTIFACT / CODE / DOCUMENT PANEL ─────────────────────────────── */}
+            {/* ── ARTIFACT / CODE / DOCUMENT PANEL ─────────────────────────────── */}
       {codePanel && (
         <ArtifactPanel
           panel={codePanel}
           onClose={() => setCodePanel(null)}
           isMobile={isMobile}
+          renderDocument={(content) => <RenderedMessage content={content} />}
         />
       )}
 

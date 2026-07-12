@@ -237,6 +237,7 @@ const useAuthStore = create((set, get) => ({
         // Matlab refreshToken cookie invalid/expired/missing hai.
         if (status === 401 || status === 403) {
           restoreSessionRetryAttempt = 0;
+          sessionStorage.setItem("cf_auth_notice", "Your session has ended. Please sign in again.");
           tokenStorage.clear();
 
           set({

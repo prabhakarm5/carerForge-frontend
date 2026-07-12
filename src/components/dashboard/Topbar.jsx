@@ -141,13 +141,13 @@ function ProfileDropdown({ user, wallet, open, onClose }) {
 
   const doLogoutThis = useCallback(async () => {
     setLoggingOut("this");
-    try { await logoutCurrentDevice(); onClose(); navigate("/login"); }
+    try { await logoutCurrentDevice(); onClose(); navigate("/login?logout=current", { replace: true }); }
     finally { setLoggingOut(null); }
   }, [logoutCurrentDevice, navigate, onClose]);
 
   const doLogoutAll = useCallback(async () => {
     setLoggingOut("all");
-    try { await logoutEverywhere(); onClose(); navigate("/login"); }
+    try { await logoutEverywhere(); onClose(); navigate("/login?logout=all", { replace: true }); }
     finally { setLoggingOut(null); }
   }, [logoutEverywhere, navigate, onClose]);
 

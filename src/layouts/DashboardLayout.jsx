@@ -26,11 +26,13 @@ function DashboardLayout() {
   const isChatPage = location.pathname.startsWith("/chat");
 
   return (
-    <div className="min-h-screen bg-[#020617]">
+    <div className={isChatPage ? "h-[100dvh] overflow-hidden bg-[#050810]" : "min-h-screen bg-[#020617]"}>
       <Sidebar
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
         onExpandedChange={setSidebarExpanded}
+        wallet={wallet}
+        refreshWallet={() => getWallet().then(setWallet).catch(() => {})}
       />
 
       {/* margin-left sidebar ki current width ke barabar — collapse/expand par turant sync hota hai.
@@ -42,7 +44,7 @@ function DashboardLayout() {
       `}</style>
 
       <div
-        className="dashboard-content-area min-h-screen flex flex-col transition-all duration-300"
+        className={"dashboard-content-area flex flex-col transition-all duration-300 " + (isChatPage ? "h-[100dvh] overflow-hidden" : "min-h-screen")}
       >
         <Topbar
           setSidebarOpen={setSidebarOpen}
@@ -56,7 +58,7 @@ function DashboardLayout() {
             <Outlet context={{ wallet, setWallet }} />
           </main>
         ) : (
-          <main className="flex-1 p-6 overflow-auto">
+          <main className="flex-1 overflow-auto p-3 sm:p-6">
             <Outlet context={{ wallet, setWallet }} />
           </main>
         )}
