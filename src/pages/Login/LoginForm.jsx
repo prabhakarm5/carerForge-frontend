@@ -9,6 +9,7 @@ import { loginUser, resendVerificationEmail } from "../../services/userAuthServi
 import HumanVerification from "../../components/auth/HumanVerification";
 import SocialLogin from "../../components/auth/SocialLogin";
 
+
 // NOTE: This component renders ONLY the right-side form. Your route/layout
 // already renders <AuthLeftPanel /> as a sibling — do NOT import or render
 // it again in here, that was what caused the duplicate panel + the extra

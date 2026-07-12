@@ -74,13 +74,13 @@ function WalletCards() {
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6">
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6 w-full min-w-0">
       {cards.map((card) => {
         const Icon = card.icon;
         return (
           <div
             key={card.label}
-            className="group rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 p-4 sm:p-6 hover:border-slate-700 transition-colors"
+            className="group min-w-0 rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 p-4 sm:p-6 hover:border-slate-700 transition-colors"
           >
             <div className="flex justify-between items-start gap-2">
               <div className="min-w-0">
@@ -90,7 +90,7 @@ function WalletCards() {
                 </h2>
               </div>
               <div className={`p-2 sm:p-3 rounded-xl sm:rounded-2xl ${card.iconBg} shrink-0 group-hover:scale-105 transition-transform`}>
-                <Icon size={18} className={`${card.iconColor} sm:w-7 sm:h-7`} />
+                <Icon className={`${card.iconColor} w-[18px] h-[18px] sm:w-7 sm:h-7`} />
               </div>
             </div>
           </div>
@@ -98,8 +98,8 @@ function WalletCards() {
       })}
 
       {/* Remaining - full width on mobile (col-span-2) */}
-      <div className="col-span-2 sm:col-span-1 group relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-violet-600 to-indigo-700 p-4 sm:p-6 shadow-lg shadow-violet-900/30">
-        <div className="absolute -top-8 -right-8 w-24 sm:w-32 h-24 sm:h-32 bg-white/10 rounded-full blur-2xl" />
+      <div className="col-span-2 sm:col-span-1 group relative overflow-hidden min-w-0 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-violet-600 to-indigo-700 p-4 sm:p-6 shadow-lg shadow-violet-900/30">
+        <div className="absolute -top-8 -right-8 w-24 sm:w-32 h-24 sm:h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
         <div className="relative flex justify-between items-start gap-2">
           <div className="min-w-0">
             <p className="text-violet-100 text-[11px] sm:text-sm">Remaining</p>
@@ -108,7 +108,7 @@ function WalletCards() {
             </h2>
           </div>
           <div className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-white/15 shrink-0 group-hover:scale-105 transition-transform">
-            <Wallet size={18} className="text-white sm:w-7 sm:h-7" />
+            <Wallet className="text-white w-[18px] h-[18px] sm:w-7 sm:h-7" />
           </div>
         </div>
       </div>

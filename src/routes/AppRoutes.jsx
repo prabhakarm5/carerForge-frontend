@@ -1,6 +1,7 @@
 // src/routes/AppRoutes.jsx
 
-import { Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
+import { Routes, Route, useLocation } from "react-router-dom";
 
 // ================= PUBLIC PAGES =================
 import HomePage from "../pages/Home/HomePage";
@@ -49,105 +50,198 @@ import DeveloperDocumentation from "../document/DeveloperDocumentation";
 import TermsAndConditions from "../shared/Termsandconditions";
 import PaymentPolicy from "../shared/Paymentpolicy";
 
-export default function AppRoutes() {
-  return (
-    <Routes>
-      {/* ================================================================
-          PUBLIC ROUTES
-          Login/auth ke bina accessible pages
-          ================================================================ */}
-      <Route element={<PublicLayout />}>
-        <Route path="/" element={<HomePage />} />
+// ================= 404 =================
+import NotFound from "../pages/NotFound";
 
-        {/* Auth pages */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+const SITE_NAME = "CareerForge AI";
 
-        {/* Email verification pages */}
-        <Route
-          path="/verification-pending"
-          element={<VerificationPendingPage />}
-        />
-        <Route path="/verify-email" element={<VerifyEmailPage />} />
-        <Route
-          path="/verification-success"
-          element={<VerificationSuccessPage />}
-        />
-        <Route
-          path="/verification-failed"
-          element={<VerificationFailedPage />}
-        />
+// ✅ SINGLE SOURCE OF TRUTH — sirf yahan ek line add karo, tab title
+// har page pe automatic set ho jayega. Kisi bhi individual page file
+// ko chhoona nahi padega.
+//
+// Static paths: exact string match ("/dashboard").
+// Dynamic paths (jaise "/chat/:id"): key ke aage "*" laga do, jaise
+// "/chat/*" — iska matlab "/chat/" se shuru hone wala koi bhi path
+// isi title se match hoga (e.g. "/chat/abc123").
+const ROUTE_TITLES = {
+    "/": "Home",
+    "/login": "Login",
+    "/register": "Create Account",
 
-        {/* Forgot / reset password pages */}
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/verify-reset-otp" element={<VerifyResetOtpPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="/oauth/success" element={<OAuthSuccessPage />} />
-      </Route>
+    "/verification-pending": "Verify Your Email",
+    "/verify-email": "Verifying Email",
+    "/verification-success": "Email Verified",
+    "/verification-failed": "Verification Failed",
 
-      {/* ================================================================
-          PROTECTED ROUTES
-          Sirf logged-in user access kar sakta hai.
-          ProtectedRoute auth check karega.
-          DashboardLayout sidebar/topbar provide karega.
-          ================================================================ */}
-      <Route
-        element={
-          <ProtectedRoute>
-            <DashboardLayout />
-          </ProtectedRoute>
+    "/forgot-password": "Forgot Password",
+    "/verify-reset-otp": "Verify OTP",
+    "/reset-password": "Reset Password",
+    "/oauth/success": "Signing You In",
+
+    "/dashboard": "Dashboard",
+    "/chat": "Chat",
+    "/chat/*": "Chat",
+    "/image-generator": "AI Image Generator",
+    "/profile": "Your Profile",
+    "/wallet": "Wallet",
+
+    "/payment/success": "Payment Successful",
+    "/payment/failed": "Payment Failed",
+
+    "/settings": "Settings",
+    "/history": "History",
+    "/bookmarks": "Bookmarks",
+    "/pdf-ai": "PDF AI",
+
+    "/docs/user": "User Documentation",
+    "/docs/developer": "Developer Documentation",
+
+    "/terms": "Terms & Conditions",
+    "/payment-policy": "Payment Policy",
+};
+
+function resolveTitle(pathname) {
+    // 1. Exact match first
+    if (ROUTE_TITLES[pathname]) return ROUTE_TITLES[pathname];
+
+    // 2. Wildcard prefix match (for dynamic routes like /chat/:id)
+    for (const key of Object.keys(ROUTE_TITLES)) {
+        if (key.endsWith("/*")) {
+            const prefix = key.slice(0, -1); // "/chat/*" -> "/chat/"
+            if (pathname.startsWith(prefix)) return ROUTE_TITLES[key];
         }
-      >
-        {/* Main dashboard */}
-        <Route path="/dashboard" element={<DashboardPage />} />
+    }
 
-        {/* Chat */}
-        <Route path="/chat" element={<ChatPage />} />
-        <Route path="/chat/:id" element={<ChatPage />} />
+    // 3. No match (unknown/404 route) — fall back to a generic label
+    return "Page Not Found";
+}
 
-        {/* AI image generator */}
-        <Route path="/image-generator" element={<ImageGeneratorPage />} />
+// ✅ Runs once per route change, sets document.title automatically.
+// Placed inside <Routes>'s parent, so it re-runs on every navigation
+// without needing to be added to any individual page component.
+function AutoPageTitle() {
+    const location = useLocation();
 
-        {/* Profile */}
-        <Route path="/profile" element={<ProfilePage />} />
+    useEffect(() => {
+        const title = resolveTitle(location.pathname);
+        document.title = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
+    }, [location.pathname]);
 
-        {/* Wallet */}
-        <Route path="/wallet" element={<WalletPage />} />
+    return null;
+}
 
-        {/* Payment result pages */}
-        <Route path="/payment/success" element={<PaymentSuccessPage />} />
-        <Route path="/payment/failed" element={<PaymentFailedPage />} />
+export default function AppRoutes() {
+    return (
+        <>
+            <AutoPageTitle />
 
-        {/* Placeholder pages — baad mein real pages bana denge */}
-        <Route
-          path="/settings"
-          element={<h1 className="p-10 text-white">Settings</h1>}
-        />
-        <Route
-          path="/history"
-          element={<h1 className="p-10 text-white">History</h1>}
-        />
-        <Route
-          path="/bookmarks"
-          element={<h1 className="p-10 text-white">Bookmarks</h1>}
-        />
-        <Route
-          path="/pdf-ai"
-          element={<h1 className="p-10 text-white">PDF AI</h1>}
-        />
-      </Route>
+            <Routes>
+                {/* ================================================================
+                    PUBLIC ROUTES
+                    Login/auth ke bina accessible pages
+                    ================================================================ */}
+                <Route element={<PublicLayout />}>
+                    <Route path="/" element={<HomePage />} />
 
-      {/* ================================================================
-          DOCUMENTATION ROUTES
-          ================================================================ */}
-      <Route path="/docs/user" element={<UserDocumentation />} />
-      <Route path="/docs/developer" element={<DeveloperDocumentation />} />
+                    {/* Auth pages */}
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/register" element={<RegisterPage />} />
 
-      {/* ================================================================
-          LEGAL ROUTES
-          ================================================================ */}
-      <Route path="/terms" element={<TermsAndConditions />} />
-      <Route path="/payment-policy" element={<PaymentPolicy />} />
-    </Routes>
-  );
+                    {/* Email verification pages */}
+                    <Route
+                        path="/verification-pending"
+                        element={<VerificationPendingPage />}
+                    />
+                    <Route path="/verify-email" element={<VerifyEmailPage />} />
+                    <Route
+                        path="/verification-success"
+                        element={<VerificationSuccessPage />}
+                    />
+                    <Route
+                        path="/verification-failed"
+                        element={<VerificationFailedPage />}
+                    />
+
+                    {/* Forgot / reset password pages */}
+                    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                    <Route path="/verify-reset-otp" element={<VerifyResetOtpPage />} />
+                    <Route path="/reset-password" element={<ResetPasswordPage />} />
+                    <Route path="/oauth/success" element={<OAuthSuccessPage />} />
+                </Route>
+
+                {/* ================================================================
+                    PROTECTED ROUTES
+                    Sirf logged-in user access kar sakta hai.
+                    ProtectedRoute auth check karega.
+                    DashboardLayout sidebar/topbar provide karega.
+                    ================================================================ */}
+                <Route
+                    element={
+                        <ProtectedRoute>
+                            <DashboardLayout />
+                        </ProtectedRoute>
+                    }
+                >
+                    {/* Main dashboard */}
+                    <Route path="/dashboard" element={<DashboardPage />} />
+
+                    {/* Chat */}
+                    <Route path="/chat" element={<ChatPage />} />
+                    <Route path="/chat/:id" element={<ChatPage />} />
+
+                    {/* AI image generator */}
+                    <Route path="/image-generator" element={<ImageGeneratorPage />} />
+
+                    {/* Profile */}
+                    <Route path="/profile" element={<ProfilePage />} />
+
+                    {/* Wallet */}
+                    <Route path="/wallet" element={<WalletPage />} />
+
+                    {/* Payment result pages */}
+                    <Route path="/payment/success" element={<PaymentSuccessPage />} />
+                    <Route path="/payment/failed" element={<PaymentFailedPage />} />
+
+                    {/* Placeholder pages — baad mein real pages bana denge */}
+                    <Route
+                        path="/settings"
+                        element={<h1 className="p-10 text-white">Settings</h1>}
+                    />
+                    <Route
+                        path="/history"
+                        element={<h1 className="p-10 text-white">History</h1>}
+                    />
+                    <Route
+                        path="/bookmarks"
+                        element={<h1 className="p-10 text-white">Bookmarks</h1>}
+                    />
+                    <Route
+                        path="/pdf-ai"
+                        element={<h1 className="p-10 text-white">PDF AI</h1>}
+                    />
+                </Route>
+
+                {/* ================================================================
+                    DOCUMENTATION ROUTES
+                    ================================================================ */}
+                <Route path="/docs/user" element={<UserDocumentation />} />
+                <Route path="/docs/developer" element={<DeveloperDocumentation />} />
+
+                {/* ================================================================
+                    LEGAL ROUTES
+                    ================================================================ */}
+                <Route path="/terms" element={<TermsAndConditions />} />
+                <Route path="/payment-policy" element={<PaymentPolicy />} />
+
+                {/* ================================================================
+                    404 — CATCH-ALL
+                    Yeh HAMESHA sabse aakhri route hona chahiye. Jo bhi URL
+                    upar ke kisi route se match na ho ("/chathik" jaisa
+                    typo/random URL), woh yahan gir kar NotFound dikhayega
+                    — blank page ya router-crash ki jagah.
+                    ================================================================ */}
+                <Route path="*" element={<NotFound />} />
+            </Routes>
+        </>
+    );
 }

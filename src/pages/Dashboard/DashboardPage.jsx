@@ -7,16 +7,18 @@ import TokenChart from "../../components/dashboard/TokenChart";
 
 function DashboardPage() {
   return (
-    <div className="space-y-4 sm:space-y-6 lg:space-y-8">
+    <div className="w-full min-w-0 space-y-4 overflow-x-hidden sm:space-y-6 lg:space-y-8">
       <WelcomeBanner />
       <WalletCards />
       <StatsCards />
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
-        <div className="xl:col-span-2">
+      <div className="grid min-w-0 grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-3">
+        <div className="min-w-0 xl:col-span-2">
           <RecentConversations />
         </div>
-        <TokenChart />
+        <div className="min-w-0">
+          <TokenChart />
+        </div>
       </div>
 
       <QuickActions />

@@ -28,10 +28,14 @@ function BackendReconnectingBanner() {
 
     return (
         <div
-            className="fixed bottom-4 right-4 z-[9999] flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2 text-xs sm:text-sm font-medium text-black shadow-lg"
+            className="fixed bottom-4 right-4 z-[9999] flex items-center gap-2 rounded-full px-4 py-2 text-xs sm:text-sm font-semibold shadow-lg"
+            style={{ background: "#fbbf24", color: "#1a1105" }}
             role="status"
         >
-            <span className="h-2 w-2 rounded-full bg-black/70 animate-pulse" />
+            <span
+                className="h-2 w-2 rounded-full animate-pulse"
+                style={{ background: "rgba(0,0,0,0.55)" }}
+            />
             Reconnecting to server...
         </div>
     );
@@ -56,10 +60,34 @@ function App() {
 
     return (
         <BrowserRouter>
-            <Toaster position="top-right" />
+            {/* Dark-themed toasts so they match the rest of the app instead
+                of react-hot-toast's default white card */}
+            <Toaster
+                position="top-right"
+                toastOptions={{
+                    duration: 4000,
+                    style: {
+                        background: "#120f1f",
+                        color: "#ffffff",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        fontSize: "13px",
+                        fontWeight: 500,
+                        borderRadius: "12px",
+                        padding: "12px 14px",
+                    },
+                    success: {
+                        iconTheme: { primary: "#34d399", secondary: "#120f1f" },
+                    },
+                    error: {
+                        iconTheme: { primary: "#f87171", secondary: "#120f1f" },
+                    },
+                }}
+            />
+
             {/* Small, non-blocking indicator in the corner — only shows
                 when logged in AND backend is unreachable */}
             <BackendReconnectingBanner />
+
             <AppRoutes />
         </BrowserRouter>
     );

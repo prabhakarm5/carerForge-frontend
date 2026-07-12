@@ -1,3 +1,4 @@
+// RecentConversations.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MessageSquare, Clock, ArrowRight, RotateCcw } from "lucide-react";
@@ -29,7 +30,7 @@ function RecentConversations() {
   }
 
   return (
-    <div className="rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 p-4 sm:p-6">
+    <div className="rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 p-4 sm:p-6 w-full min-w-0">
       <div className="flex justify-between items-center mb-4 sm:mb-5">
         <h2 className="text-base sm:text-xl text-white font-bold">Recent Conversations</h2>
         <button
@@ -73,19 +74,19 @@ function RecentConversations() {
             <div
               key={conversation.id}
               onClick={() => navigate("/chat/" + conversation.id)}
-              className="p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800 hover:border-violet-600/50 hover:bg-slate-800/50 transition-all duration-200 cursor-pointer active:scale-[0.99]"
+              className="p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-800 hover:border-violet-600/50 hover:bg-slate-800/50 transition-all duration-200 cursor-pointer active:scale-[0.99] min-w-0"
             >
               <div className="flex justify-between items-start gap-2 sm:gap-3">
                 <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
                   <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-violet-500/10 shrink-0">
-                    <MessageSquare size={14} className="text-violet-400 sm:w-4 sm:h-4" />
+                    <MessageSquare className="text-violet-400 w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-white font-medium text-xs sm:text-sm truncate">
                       {conversation.title}
                     </h3>
                     {conversation.featureType && (
-                      <p className="text-slate-500 text-[10px] sm:text-xs mt-0.5 sm:mt-1">
+                      <p className="text-slate-500 text-[10px] sm:text-xs mt-0.5 sm:mt-1 truncate">
                         {conversation.featureType}
                       </p>
                     )}

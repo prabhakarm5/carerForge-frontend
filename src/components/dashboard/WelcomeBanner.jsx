@@ -17,11 +17,12 @@ function WelcomeBanner() {
       className="
         relative overflow-hidden rounded-2xl sm:rounded-3xl
         bg-gradient-to-br from-violet-600 via-violet-700 to-fuchsia-700
-        p-5 sm:p-7 md:p-8
+        p-4 sm:p-7 md:p-8
         shadow-lg shadow-violet-900/30
+        w-full min-w-0
       "
     >
-      <div className="absolute -top-10 -right-10 w-32 sm:w-48 h-32 sm:h-48 bg-white/10 rounded-full blur-2xl" />
+      <div className="absolute -top-6 -right-6 sm:-top-10 sm:-right-10 w-20 sm:w-48 h-20 sm:h-48 bg-white/10 rounded-full blur-xl sm:blur-2xl pointer-events-none" />
 
       <div className="relative flex items-center gap-2 mb-1.5 sm:mb-2">
         <Sparkles size={16} className="text-white/90 shrink-0" />
@@ -30,7 +31,7 @@ function WelcomeBanner() {
         </span>
       </div>
 
-      <h1 className="relative text-lg sm:text-2xl md:text-3xl font-bold text-white tracking-tight leading-snug">
+      <h1 className="relative text-lg sm:text-2xl md:text-3xl font-bold text-white tracking-tight leading-snug break-words">
         Welcome back, {firstName} 👋
       </h1>
       <p className="relative text-violet-100/80 text-xs sm:text-sm mt-1.5 sm:mt-2 max-w-md">
