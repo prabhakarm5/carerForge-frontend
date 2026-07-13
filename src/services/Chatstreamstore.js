@@ -15,7 +15,6 @@ function defaultStreamEntry(controller) {
         modelSwitchNotice: null,
         error: null,
         donePayload: null,
-        thoughts: [], // "thought process" panel
         lastEventAt: Date.now(), // watchdog: last time ANY event touched this stream
         controller,
     };
@@ -159,19 +158,7 @@ const useChatStreamStore = create((set, get) => ({
                 }
                 return;
             }
-
-            if (eventName === "thought") {
-                try {
-                    const payload = JSON.parse(data);
-                    writeToStore((existing) => ({
-                        ...existing,
-                        thoughts: [...existing.thoughts, payload.label],
-                    }));
-                } catch {
-                    /* ignore malformed thought */
-                }
-                return;
-            }
+            if (eventName === "thought") return;
 
             if (eventName === "status") {
                 flushPendingTextSync();

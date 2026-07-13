@@ -1,4 +1,4 @@
-﻿import { Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 // ✅ FIX — pehle ka BrandLogo "bg-clip-text text-transparent" gradient-text
 // trick use kar raha tha. Ye trick fragile hai — agar gradient background
@@ -11,8 +11,9 @@
 //   text nahi)
 // - Brand text: solid white color, NO gradient-text, NO clip trick
 // Isliye ye kabhi invisible nahi hoga, chahe kahin bhi use karo.
-export default function BrandLogo({ size = "md" }) {
+export default function BrandLogo({ size = "md", showText = true }) {
   const sizes = {
+    xs: { icon: "h-7 w-7", iconSize: 13, text: "text-sm" },
     sm: { icon: "h-7 w-7", iconSize: 14, text: "text-base" },
     md: { icon: "h-9 w-9", iconSize: 18, text: "text-xl" },
     lg: { icon: "h-11 w-11", iconSize: 22, text: "text-2xl" },
@@ -26,9 +27,9 @@ export default function BrandLogo({ size = "md" }) {
       >
         <Sparkles size={s.iconSize} className="text-white" strokeWidth={2.5} />
       </span>
-      <span className={`${s.text} font-black tracking-tight text-white whitespace-nowrap`}>
+      {showText && <span className={`brand-logo-text ${s.text} font-black tracking-tight text-white whitespace-nowrap`}>
         CareerForge<span className="text-cyan-300"> AI</span>
-      </span>
+      </span>}
     </span>
   );
 }

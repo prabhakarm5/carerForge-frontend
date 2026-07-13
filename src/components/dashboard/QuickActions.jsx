@@ -1,49 +1,94 @@
+/* QuickActions.jsx */
 import { MessageSquarePlus, Image, FileText, Globe } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 const actions = [
-  { title: "New Chat", icon: MessageSquarePlus, path: "/chat", color: "violet" },
-  { title: "Image AI", icon: Image, path: "/image-generator", color: "pink" },
-  { title: "PDF AI", icon: FileText, path: "/pdf-ai", color: "cyan" },
-  { title: "Website AI", icon: Globe, path: "/website", color: "emerald" },
+  { title: "New Chat",    icon: MessageSquarePlus, path: "/chat",            color: "violet"   },
+  { title: "Image AI",    icon: Image,              path: "/image-generator", color: "pink"     },
+  { title: "PDF AI",      icon: FileText,          path: "/pdf-ai",          color: "cyan"     },
+  { title: "Website AI",  icon: Globe,             path: "/website",         color: "emerald"  },
 ];
 
 const colorMap = {
-  violet: "bg-violet-500/10 text-violet-400 group-hover:bg-violet-600",
-  pink: "bg-pink-500/10 text-pink-400 group-hover:bg-pink-600",
-  cyan: "bg-cyan-500/10 text-cyan-400 group-hover:bg-cyan-600",
-  emerald: "bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-600",
+  violet:   "from-violet-500 to-violet-600",
+  pink:     "from-pink-500 to-pink-600",
+  cyan:     "from-cyan-500 to-cyan-600",
+  emerald:  "from-emerald-500 to-emerald-600",
 };
 
 function QuickActions() {
-  const navigate = useNavigate();
-
   return (
-    <div className="rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 p-4 sm:p-6 w-full min-w-0">
-      <h2 className="text-base sm:text-xl font-bold text-white mb-4 sm:mb-5">Quick Actions</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 min-w-0">
-        {actions.map((item, index) => {
+    <section className="
+      relative
+      rounded-3xl
+      bg-slate-900/80
+      backdrop-blur-md
+      border border-slate-700/50
+      shadow-xl
+      p-5 sm:p-8
+      w-full
+      overflow-hidden
+    ">
+      {/* subtle background glow */}
+      <div className="absolute -top-10 -right-10 w-40 h-40 bg-violet-500/20 rounded-full blur-3xl pointer-events-none" />
+
+      <h2 className="text-xl sm:text-2xl font-bold text-white mb-6 relative z-10">
+        Quick Actions
+      </h2>
+
+      <div className="
+        grid
+        grid-cols-2
+        sm:grid-cols-4
+        gap-4
+        relative z-10
+      ">
+        {actions.map((item, idx) => {
           const Icon = item.icon;
           return (
-            <button
-              key={index}
-              type="button"
-              onClick={() => navigate(item.path)}
-              className="group min-w-0 rounded-xl sm:rounded-2xl bg-slate-800/60 border border-slate-800 hover:border-slate-700 transition-all duration-200 p-4 sm:p-6 active:scale-95"
+            <Link
+              key={idx}
+              to={item.path}
+              className="
+                group
+                block
+                rounded-2xl
+                bg-slate-800/60
+                border border-slate-700
+                hover:border-slate-600
+                transition-all
+                duration-300
+                ease-in-out
+                active:scale-95
+                p-4
+                text-center
+              "
             >
               <div
-                className={`w-10 h-10 sm:w-12 sm:h-12 mx-auto rounded-lg sm:rounded-xl flex items-center justify-center transition-colors duration-200 ${colorMap[item.color]}`}
+                className={`
+                  w-10 h-10
+                  mx-auto
+                  rounded-xl
+                  bg-gradient-to-br
+                  ${colorMap[item.color]}
+                  flex
+                  items-center
+                  justify-center
+                  shadow-lg
+                  group-hover:shadow-xl
+                  transition-shadow
+                `}
               >
-                <Icon className="group-hover:text-white transition-colors w-[18px] h-[18px] sm:w-[22px] sm:h-[22px]" />
+                <Icon className="w-5 h-5 text-white" />
               </div>
-              <p className="text-white text-xs sm:text-sm font-medium mt-2.5 sm:mt-3 leading-tight truncate">
+              <p className="mt-2 text-sm font-medium text-slate-200 group-hover:text-white truncate">
                 {item.title}
               </p>
-            </button>
+            </Link>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }
 

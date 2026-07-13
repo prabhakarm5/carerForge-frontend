@@ -2,7 +2,7 @@ import WelcomeBanner from "../../components/dashboard/WelcomeBanner";
 import WalletCards from "../../components/dashboard/WalletCards";
 import StatsCards from "../../components/dashboard/StatsCards";
 import QuickActions from "../../components/dashboard/QuickActions";
-import RecentConversations from "../../components/dashboard/RecentConversations";
+import RecentWorkspaceActivity from "../../components/dashboard/RecentWorkspaceActivity";
 import TokenChart from "../../components/dashboard/TokenChart";
 
 function DashboardPage() {
@@ -14,7 +14,7 @@ function DashboardPage() {
 
       <div className="grid min-w-0 grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-3">
         <div className="min-w-0 xl:col-span-2">
-          <RecentConversations />
+          <RecentWorkspaceActivity />
         </div>
         <div className="min-w-0">
           <TokenChart />

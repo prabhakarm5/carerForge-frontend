@@ -8,6 +8,7 @@ import { handleApiError } from "../../utils/errorHandler";
 import { loginUser, resendVerificationEmail } from "../../services/userAuthService";
 import HumanVerification from "../../components/auth/HumanVerification";
 import SocialLogin from "../../components/auth/SocialLogin";
+import BrandLogo from "../../shared/BrandLogo";
 
 
 // NOTE: This component renders ONLY the right-side form. Your route/layout
@@ -333,15 +334,7 @@ function LoginForm() {
         >
             <div className="w-full max-w-[380px]">
 
-                <div className="flex items-center gap-2 mb-4 lg:hidden">
-                    <span
-                        className="grid h-8 w-8 place-items-center rounded-lg"
-                        style={{ background: "linear-gradient(135deg, #fbbf24, #d946ef 55%, #7c3aed)" }}
-                    >
-                        <Lock size={14} color="#ffffff" strokeWidth={2.5} />
-                    </span>
-                    <span className="font-black text-[14px] tracking-tight" style={{ color: "#ffffff" }}>CareerForge AI</span>
-                </div>
+                <div className="mb-4 lg:hidden"><BrandLogo size="xs" /></div>
 
                 <div
                     className="relative rounded-2xl p-5 sm:p-6"

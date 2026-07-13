@@ -18,22 +18,22 @@
 
 const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
-// ✅ Dev mode mein agar env missing hai to localhost fallback use hoga
-// ✅ Prod mode mein env missing hua to clear error milega
+// Ã¢Å“â€¦ Dev mode mein agar env missing hai to localhost fallback use hoga
+// Ã¢Å“â€¦ Prod mode mein env missing hua to clear error milega
 if (!rawApiBaseUrl && import.meta.env.PROD) {
   throw new Error(
     "VITE_API_BASE_URL missing hai. Production build ke liye GitHub Secret ya .env.production mein backend URL set karo."
   );
 }
 
-// ✅ Final API base URL
+// Ã¢Å“â€¦ Final API base URL
 // Local fallback: http://localhost:9092
 // Last slash remove: https://api.com/ -> https://api.com
 export const API_BASE_URL = (
   rawApiBaseUrl || "http://localhost:9092"
 ).replace(/\/+$/, "");
 
-// ✅ Development warning
+// Ã¢Å“â€¦ Development warning
 if (import.meta.env.DEV && !rawApiBaseUrl) {
   console.warn(
     "VITE_API_BASE_URL missing hai. Default http://localhost:9092 use ho raha hai."
@@ -77,6 +77,7 @@ export const API = {
   ADMIN: {
     GET_PROFILE: "/api/admin/me",
     UPDATE_PROFILE: "/api/admin/me",
+    MONITORING: "/api/admin/monitoring/overview",
     GET_ALL_USERS: "/api/admin/users",
 
     GET_USER_BY_ID: (id) => `/api/admin/users/${id}`,
@@ -90,6 +91,12 @@ export const API = {
     UNBLOCK_USER: (id) => `/api/admin/users/${id}/unblock`,
 
     DELETE_USER: (id) => `/api/admin/users/${id}`,
+    USER_ACTIVITY: (id) => `/api/admin/monitoring/users/${id}`,
+    MESSAGE_USER: (id) => `/api/admin/users/${id}/message`,
+    PLANS: "/api/admin/plans",
+    PLAN: (id) => `/api/admin/plans/${id}`,
+    PROMOS: "/api/admin/promos",
+    PROMO: (id) => `/api/admin/promos/${id}`,
   },
 
   // ================= CHAT =================
@@ -129,6 +136,12 @@ export const API = {
     HISTORY: "/api/payment/history",
   },
 
+  // ================= PROMOS =================
+  PROMOS: {
+    AVAILABLE: "/api/promos",
+    CLAIM: (code) => `/api/promos/${encodeURIComponent(code)}/claim`,
+  },
+
   // ================= PLANS =================
   PLANS: {
     GET_ALL: "/api/plans",
@@ -148,5 +161,23 @@ export const API = {
     DOWNLOAD: (id) => `/api/images/${id}/download`,
 
     REGENERATE: (id) => `/api/images/${id}/regenerate`,
+  },
+
+  // ================= LIVE JOBS =================
+  JOBS: {
+    SEARCH: "/api/jobs/search",
+  },
+  // ================= RESUME AI =================
+  RESUMES: {
+    ANALYZE: "/api/resumes/analyze",
+    GET_ALL: "/api/resumes",
+    MODELS: "/api/resumes/models",
+    GET_BY_ID: (id) => `/api/resumes/${id}`,
+    MATCH_JOB: (id) => `/api/resumes/${id}/job-match`,
+    CHAT: (id) => `/api/resumes/${id}/chat`,
+    CHAT_STREAM: (id) => `/api/resumes/${id}/chat/stream`,
+    GENERATE: (id) => `/api/resumes/${id}/generate`,
+    DOWNLOAD: (id) => `/api/resumes/${id}/download`,
+    DELETE: (id) => `/api/resumes/${id}`,
   },
 };

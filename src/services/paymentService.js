@@ -38,7 +38,7 @@ export function loadRazorpayScript() {
 // ==========================================================
 // CREATE ORDER
 // ==========================================================
-export async function createOrder(planId) {
+export async function createOrder(planId, promoCode = null) {
 
     const response = await axiosInstance.post(
 
@@ -46,6 +46,7 @@ export async function createOrder(planId) {
 
         {
             planId,
+            promoCode,
         }
 
     );
@@ -125,6 +126,8 @@ export function startCheckout({
 
     planId,
 
+    promoCode,
+
     userName,
 
     userEmail,
@@ -143,7 +146,7 @@ export function startCheckout({
 
                 await loadRazorpayScript();
 
-                const order = await createOrder(planId);
+                const order = await createOrder(planId, promoCode);
 
                 // Enable refresh protection
                 enablePaymentGuard();

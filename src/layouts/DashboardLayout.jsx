@@ -24,9 +24,10 @@ function DashboardLayout() {
 
   // Chat page full-page honi chahiye — extra padding/scroll nahi
   const isChatPage = location.pathname.startsWith("/chat");
+  const isFocusedWorkspace = isChatPage || location.pathname.startsWith("/resume");
 
   return (
-    <div className={isChatPage ? "h-[100dvh] overflow-hidden bg-[#050810]" : "min-h-screen bg-[#020617]"}>
+    <div className="overflow-hidden bg-[#050810]" style={{ height: "var(--app-height, 100dvh)" }}>
       <Sidebar
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
@@ -44,7 +45,8 @@ function DashboardLayout() {
       `}</style>
 
       <div
-        className={"dashboard-content-area flex flex-col transition-all duration-300 " + (isChatPage ? "h-[100dvh] overflow-hidden" : "min-h-screen")}
+        className="dashboard-content-area flex flex-col overflow-hidden transition-[margin] duration-200"
+        style={{ height: "var(--app-height, 100dvh)" }}
       >
         <Topbar
           setSidebarOpen={setSidebarOpen}
@@ -52,7 +54,7 @@ function DashboardLayout() {
           refreshWallet={() => getWallet().then(setWallet).catch(() => {})}
         />
 
-        {isChatPage ? (
+        {isFocusedWorkspace ? (
           // Chat: full remaining height, no padding, no extra scroll container
           <main className="flex-1 min-h-0 flex flex-col">
             <Outlet context={{ wallet, setWallet }} />

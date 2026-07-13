@@ -284,6 +284,8 @@ if (refreshChannel) {
 axiosInstance.interceptors.request.use(async (config) => {
     const requestUrl = `${config.baseURL || ""}${config.url || ""}`;
     let accessToken = useAuthStore.getState().accessToken;
+    config.headers["X-Client-Timezone"] = Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown";
+    config.headers["X-Client-Locale"] = navigator.language || "Unknown";
 
     // Dashboard ke multiple widgets login ke turant baad ek saath protected
     // APIs hit karte hain. Agar memory accessToken abhi hydrate nahi hua,

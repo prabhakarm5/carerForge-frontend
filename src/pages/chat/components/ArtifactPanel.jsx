@@ -58,8 +58,8 @@ export default function ArtifactPanel({ panel, onClose, isMobile, renderDocument
 
   const containerStyle = isMobile
     ? {
-        position: "fixed", inset: 0, zIndex: 1200,
-        background: "#0b0f17",
+        position: "fixed", left: 0, right: 0, top: 40, bottom: 0, zIndex: 1200,
+        background: "#0b0f17", color: "#e5edf7",
         display: "flex", flexDirection: "column",
         overflow: "hidden", overscrollBehavior: "contain",
         animation: "slideUp 0.2s cubic-bezier(0.22,1,0.36,1)",
@@ -69,7 +69,7 @@ export default function ArtifactPanel({ panel, onClose, isMobile, renderDocument
         maxWidth: "calc(100vw - 52px)",
         position: "fixed", right: 0, top: 40, bottom: 0, zIndex: 1200,
         display: "flex", flexDirection: "column",
-        background: "#0b0f17",
+        background: "#0b0f17", color: "#e5edf7",
         borderLeft: "1px solid rgba(167,139,250,0.28)",
         boxShadow: "-18px 0 55px rgba(0,0,0,0.72)",
         overflow: "hidden", overscrollBehavior: "contain",
@@ -202,7 +202,7 @@ export default function ArtifactPanel({ panel, onClose, isMobile, renderDocument
             flex: 1, overflow: "auto", margin: 0,
             padding: "16px 16px",
             fontSize: 12.5, lineHeight: 1.7,
-            fontFamily: "'JetBrains Mono','Fira Code',monospace",
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace", color: "#d8dee9", background: "#070b12",
             whiteSpace: "pre",
             overscrollBehavior: "contain",
             WebkitOverflowScrolling: "touch",

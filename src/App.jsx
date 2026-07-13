@@ -1,4 +1,4 @@
-﻿import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { useEffect } from "react";
 
@@ -55,6 +55,23 @@ function App() {
 
     useEffect(() => {
         restoreSession();
+        document.documentElement.dataset.reduceMotion =
+            localStorage.getItem("cf_reduce_motion") === "1" ? "true" : "false";
+
+        const viewport = window.visualViewport;
+        const syncViewportHeight = () => {
+            const height = viewport?.height || window.innerHeight;
+            document.documentElement.style.setProperty("--app-height", `${Math.round(height)}px`);
+        };
+        syncViewportHeight();
+        viewport?.addEventListener("resize", syncViewportHeight);
+        viewport?.addEventListener("scroll", syncViewportHeight);
+        window.addEventListener("orientationchange", syncViewportHeight);
+        return () => {
+            viewport?.removeEventListener("resize", syncViewportHeight);
+            viewport?.removeEventListener("scroll", syncViewportHeight);
+            window.removeEventListener("orientationchange", syncViewportHeight);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback, memo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  Plus, LayoutDashboard, MessageSquare, Image, FileText, Globe, File,
+  Plus, LayoutDashboard, MessageSquare, Image, FileText, Globe, File, BriefcaseBusiness,
   Wallet, Settings, LogOut, Sparkles, X, Search, MoreHorizontal,
   Pencil, Archive, Trash2, Check, RotateCcw, ChevronRight, ChevronUp,
   PanelLeftClose, PanelLeftOpen, User, Zap, Crown, Star, AlertTriangle, ChevronLeft,
@@ -15,6 +15,8 @@ import { getWallet } from "../../services/walletService";
 import useAuthStore from "../../store/authStore";
 import { handleApiError } from "../../utils/errorHandler";
 import RechargeModal from "../common/recharge/RechargeModal";
+import WorkspaceHistoryPanel from "./WorkspaceHistoryPanel";
+import BrandLogo from "../../shared/BrandLogo";
 
 const SEARCH_DEBOUNCE_MS = 300;
 const SIDEBAR_STORAGE_KEY = "sidebar_expanded";
@@ -36,6 +38,7 @@ const navItems = [
   { icon: MessageSquare,   text: "Chat AI",     path: "/chat",            color: "#34d399", bg: "rgba(52,211,153,0.12)"  },
   { icon: Image,           text: "Image AI",    path: "/image-generator", color: "#f472b6", bg: "rgba(244,114,182,0.12)" },
   { icon: FileText,        text: "Resume AI",   path: "/resume",          color: "#fb923c", bg: "rgba(251,146,60,0.12)"  },
+  { icon: BriefcaseBusiness, text: "Live Jobs", path: "/jobs",            color: "#fbbf24", bg: "rgba(251,191,36,0.12)"  },
   { icon: Globe,           text: "Website AI",  path: "/website",         color: "#38bdf8", bg: "rgba(56,189,248,0.12)"  },
   { icon: File,            text: "PDF AI",      path: "/pdf-ai",          color: "#a78bfa", bg: "rgba(167,139,250,0.12)" },
 ];
@@ -457,6 +460,11 @@ const ChatRow = memo(function ChatRow({
 function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refreshWallet }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const workspaceKind = location.pathname.startsWith("/resume") ? "resume"
+    : location.pathname.startsWith("/image-generator") ? "image"
+    : location.pathname.startsWith("/chat") ? "chat"
+    : null;
+  const newItemLabel = workspaceKind === "resume" ? "New analysis" : workspaceKind === "image" ? "New image" : "New chat";
   const user = useAuthStore((state) => state.user);
   const logoutCurrentDevice = useAuthStore((state) => state.logoutCurrentDevice);
   const logoutEverywhere = useAuthStore((state) => state.logoutEverywhere);
@@ -489,7 +497,10 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refres
     onExpandedChange?.(expanded);
   }, [expanded]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { loadConversations(""); return () => clearTimeout(debounceTimer.current); }, []);
+  useEffect(() => {
+    if (workspaceKind === "chat") loadConversations("");
+    return () => clearTimeout(debounceTimer.current);
+  }, [workspaceKind]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ✅ NEW — bina refresh kiye list update: jab bhi koi doosri jagah se
@@ -500,6 +511,8 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refres
   // taaki agar backend title thodi der baad generate kare, wo bhi apne
   // aap dikh jaye — bilkul Claude/ChatGPT jaisa.
   useEffect(() => {
+    if (workspaceKind !== "chat") return undefined;
+
     function silentRefresh() {
       // Agar user abhi rename/delete-confirm/menu ke beech mein hai,
       // toh disturb mat karo — warna UI achanak neeche se badal jayega.
@@ -518,7 +531,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refres
       window.removeEventListener(REFRESH_EVENT, silentRefresh);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [editingId, confirmDeleteId, openMenuId, activeQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [editingId, confirmDeleteId, openMenuId, activeQuery, workspaceKind]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -558,6 +571,12 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refres
     } catch {
       // background refresh fail ho toh user ko disturb mat karo
     }
+  }
+
+  function startNewWorkspaceItem() {
+    if (workspaceKind === "resume") navigate("/resume?new=1");
+    else if (workspaceKind === "image") navigate("/image-generator?new=1");
+    else navigate("/chat");
   }
 
   async function handleLogoutThis() {
@@ -651,29 +670,9 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refres
           className={`flex items-center shrink-0 h-[52px] px-2 ${isExpanded ? "justify-between" : "justify-center"}`}
           style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
         >
-          {isExpanded && (
-            <div className="flex items-center gap-2 min-w-0 pl-1" style={{ animation: `sbFade 220ms ${EASE}` }}>
-              <div style={{
-                background: "linear-gradient(145deg, #8b5cf6, #db2777)", borderRadius: "9px",
-                width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0, boxShadow: "0 2px 8px rgba(124,58,237,0.4), inset 0 1px 1px rgba(255,255,255,0.3)",
-              }}>
-                <Sparkles size={13} color="#fff" />
-              </div>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#f4f4f5", letterSpacing: "-0.02em" }}>
-                CareerForge AI
-              </span>
-            </div>
-          )}
-          {!isExpanded && (
-            <div style={{
-              background: "linear-gradient(145deg, #8b5cf6, #db2777)", borderRadius: "9px",
-              width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 2px 8px rgba(124,58,237,0.4), inset 0 1px 1px rgba(255,255,255,0.3)",
-            }}>
-              <Sparkles size={13} color="#fff" />
-            </div>
-          )}
+          <div className="min-w-0 pl-1" style={{ animation: `sbFade 220ms ${EASE}` }}>
+            <BrandLogo size="xs" showText={isExpanded} />
+          </div>
           <button
             onClick={() => setExpanded((v) => !v)}
             className="hidden lg:flex items-center justify-center w-7 h-7 rounded-lg sidebar-ghost-btn"
@@ -695,16 +694,16 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refres
         <div className={`shrink-0 px-2 pt-2 pb-1 ${!isExpanded ? "flex justify-center" : ""}`}>
           {isExpanded ? (
             <button
-              onClick={() => navigate("/chat")}
+              onClick={startNewWorkspaceItem}
               className="w-full flex items-center gap-2 rounded-xl py-2.5 px-3 text-white text-[13px] font-medium sb-new-chat-btn"
               style={{ background: "linear-gradient(135deg, #7c3aed 0%, #9333ea 50%, #db2777 100%)", boxShadow: "0 2px 12px rgba(124,58,237,0.35), inset 0 1px 0 rgba(255,255,255,0.15)" }}
             >
-              <Plus size={15} />New chat
+              <Plus size={15} />{newItemLabel}
             </button>
           ) : (
-            <Tooltip label="New chat">
+            <Tooltip label={newItemLabel}>
               <button
-                onClick={() => navigate("/chat")}
+                onClick={startNewWorkspaceItem}
                 className="sb-new-chat-btn"
                 style={{ background: "linear-gradient(145deg, #8b5cf6, #db2777)", boxShadow: "0 2px 10px rgba(124,58,237,0.4), inset 0 1px 1px rgba(255,255,255,0.25)", width: 36, height: 36, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}
               >
@@ -718,7 +717,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refres
         <div className="shrink-0 px-2 pb-1 flex flex-col gap-0.5">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.path;
+            const isActive = location.pathname === item.path || (item.path !== "/dashboard" && location.pathname.startsWith(`${item.path}/`));
             if (!isExpanded) {
               return (
                 <Tooltip key={item.path} label={item.text}>
@@ -744,7 +743,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refres
         <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "4px 12px" }} className="shrink-0" />
 
         {/* ─── SEARCH ─── */}
-        {isExpanded && (
+        {isExpanded && workspaceKind === "chat" && (
           <div className="px-2 pt-2 pb-1 shrink-0">
             <div style={{
               display: "flex", alignItems: "center", gap: 7, padding: "7px 10px", borderRadius: 10,
@@ -771,7 +770,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refres
         )}
 
         {/* ─── CONVERSATIONS LIST ─── */}
-        {isExpanded && (
+        {isExpanded && workspaceKind === "chat" && (
           <div className="flex-1 min-h-0 overflow-y-auto pb-2 sidebar-scroll" ref={listMenuRef} style={{ padding: "4px 8px 8px" }}>
             {loading ? (
               <div className="space-y-0.5 pt-1">
@@ -828,7 +827,11 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refres
           </div>
         )}
 
-        {!isExpanded && <div className="flex-1" />}
+        {isExpanded && (workspaceKind === "resume" || workspaceKind === "image") && (
+          <WorkspaceHistoryPanel kind={workspaceKind} />
+        )}
+
+        {(!isExpanded || !workspaceKind) && <div className="flex-1" />}
 
         {/* ─── ACCOUNT STRIP ─── */}
         <div className="shrink-0 p-2 relative" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>

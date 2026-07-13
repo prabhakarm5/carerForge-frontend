@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import {
   Wallet as WalletIcon, Plus, ArrowUpRight, ArrowDownRight,
   Loader2, RotateCcw, Zap, Gift, Image as ImageIcon, CreditCard,
@@ -64,6 +64,7 @@ export default function WalletPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const user = useAuthStore((state) => state.user);
+  const { setWallet: setLayoutWallet } = useOutletContext() || {};
 
   const [wallet, setWallet] = useState(null);
   const [walletLoading, setWalletLoading] = useState(true);
@@ -89,13 +90,14 @@ export default function WalletPage() {
       setWalletLoading(true);
       const data = await getWallet();
       setWallet(data);
+      setLayoutWallet?.(data);
       setWalletError(false);
     } catch {
       setWalletError(true);
     } finally {
       setWalletLoading(false);
     }
-  }, []);
+  }, [setLayoutWallet]);
 
   // ================= LOAD TRANSACTION HISTORY =================
   const loadHistory = useCallback(async () => {
@@ -112,29 +114,23 @@ export default function WalletPage() {
   }, []);
 
   useEffect(() => {
-    loadWallet();
-    loadHistory();
+    const timer = window.setTimeout(() => {
+      loadWallet();
+      loadHistory();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadWallet, loadHistory]);
 
-  // RechargeModal se navigate("/wallet?plan=<id>") karke aata hai
-  useEffect(() => {
-    const planId = searchParams.get("plan");
-    if (planId && !checkoutInProgress) {
-      handleCheckout(planId);
-      searchParams.delete("plan");
-      setSearchParams(searchParams, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
 
   // ================= CHECKOUT FLOW =================
-  async function handleCheckout(planId) {
+  async function handleCheckout(planId, promoCode = null) {
     setCheckoutInProgress(true);
     enablePaymentGuard(); // refresh/close warning ON
 
     try {
       const result = await startCheckout({
         planId,
+        promoCode,
         userName: user?.name,
         userEmail: user?.email,
       });
@@ -151,7 +147,7 @@ export default function WalletPage() {
       });
     } catch (err) {
       if (err?.status === "cancelled") {
-        toast("Payment cancelled", { icon: "⚠️" });
+        toast("Payment cancelled");
       } else {
         toast.error("Payment failed");
         navigate("/payment/failed", {
@@ -167,6 +163,22 @@ export default function WalletPage() {
     }
   }
 
+  // A plan selected in the modal is consumed once, then removed from the URL.
+  useEffect(() => {
+    const planId = searchParams.get("plan");
+    const promoCode = searchParams.get("promo");
+    if (!planId || checkoutInProgress) return undefined;
+    const timer = window.setTimeout(() => {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("plan");
+      nextParams.delete("promo");
+      setSearchParams(nextParams, { replace: true });
+      handleCheckout(planId, promoCode);
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // handleCheckout intentionally runs only for a newly selected plan id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, checkoutInProgress, setSearchParams]);
   function openRecharge(reason = "tokens") {
     setRechargeReason(reason);
     setRechargeOpen(true);
@@ -200,7 +212,7 @@ export default function WalletPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0a0d", padding: "24px 16px 60px" }} className="sm:p-8">
+    <div style={{ minHeight: "100%", background: "#0a0a0d", padding: "clamp(14px, 3vw, 30px) clamp(12px, 3vw, 26px) 48px" }} className="sm:p-8">
       <div style={{ maxWidth: 860, margin: "0 auto" }}>
 
         {/* ─── HEADER with BACK BUTTON ─── */}
@@ -209,7 +221,7 @@ export default function WalletPage() {
             <button
               onClick={() => navigate(-1)}
               style={{
-                width: 38, height: 38, borderRadius: 12, flexShrink: 0,
+                width: 38, height: 38, borderRadius: 8, flexShrink: 0,
                 background: "rgba(255,255,255,0.05)",
                 border: "1px solid rgba(255,255,255,0.1)",
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -222,10 +234,10 @@ export default function WalletPage() {
             </button>
 
             <div style={{
-              width: 38, height: 38, borderRadius: 12,
-              background: "linear-gradient(135deg,#7c3aed,#db2777)",
+              width: 38, height: 38, borderRadius: 8,
+              background: "#7c3aed",
               display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 0 18px rgba(124,58,237,0.3)", flexShrink: 0,
+              boxShadow: "none", flexShrink: 0,
             }}>
               <WalletIcon size={18} color="#fff" />
             </div>
@@ -241,10 +253,10 @@ export default function WalletPage() {
           {/* Balance card */}
           <div className="sm:col-span-3">
             {walletLoading ? (
-              <Skeleton h={218} r={20} />
+              <Skeleton h={218} r={8} />
             ) : walletError ? (
               <div style={{
-                padding: 24, borderRadius: 20, textAlign: "center", height: "100%",
+                padding: 24, borderRadius: 8, textAlign: "center", height: "100%",
                 background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)",
               }}>
                 <p style={{ color: "rgba(252,165,165,0.9)", fontSize: 13, marginBottom: 10 }}>
@@ -259,15 +271,11 @@ export default function WalletPage() {
               </div>
             ) : (
               <div style={{
-                borderRadius: 20, padding: "22px 22px 20px", height: "100%",
-                background: "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(219,39,119,0.12))",
+                borderRadius: 8, padding: "22px 22px 20px", height: "100%",
+                background: "#11131a",
                 border: "1px solid rgba(255,255,255,0.08)",
                 position: "relative", overflow: "hidden",
               }}>
-                <div style={{
-                  position: "absolute", top: -60, right: -60, width: 200, height: 200, borderRadius: "50%",
-                  background: "radial-gradient(circle, rgba(124,58,237,0.25) 0%, transparent 70%)", pointerEvents: "none",
-                }} />
                 <p style={{ fontSize: 12.5, color: "rgba(255,255,255,0.5)", margin: "0 0 6px", position: "relative" }}>
                   Available balance
                 </p>
@@ -281,8 +289,8 @@ export default function WalletPage() {
                 <div style={{ height: 6, borderRadius: 99, background: "rgba(255,255,255,0.08)", overflow: "hidden", marginBottom: 10, position: "relative" }}>
                   <div style={{
                     height: "100%", width: `${usedPercent}%`,
-                    background: "linear-gradient(90deg,#818cf8,#c084fc)",
-                    borderRadius: 99, transition: "width 0.4s ease",
+                    background: "#818cf8",
+                    borderRadius: 99, transition: "width 0.18s ease",
                   }} />
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "rgba(255,255,255,0.4)", marginBottom: 20, position: "relative" }}>
@@ -295,16 +303,16 @@ export default function WalletPage() {
                   disabled={checkoutInProgress}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-                    width: "100%", padding: "11px 16px", borderRadius: 12, position: "relative",
-                    background: "linear-gradient(135deg,#7c3aed,#db2777)",
+                    width: "100%", padding: "11px 16px", borderRadius: 8, position: "relative",
+                    background: "#7c3aed",
                     color: "#fff", fontSize: 13.5, fontWeight: 600, border: "none",
                     cursor: checkoutInProgress ? "not-allowed" : "pointer",
                     opacity: checkoutInProgress ? 0.6 : 1,
-                    boxShadow: "0 0 18px rgba(124,58,237,0.3)",
+                    boxShadow: "none",
                   }}
                 >
                   {checkoutInProgress ? (
-                    <><Loader2 size={15} className="animate-spin" /> Processing…</>
+                    <><Loader2 size={15} className="animate-spin" /> Processing...</>
                   ) : (
                     <><Plus size={15} /> Recharge wallet</>
                   )}
@@ -316,25 +324,21 @@ export default function WalletPage() {
           {/* Current plan card */}
           <div className="sm:col-span-2">
             {walletLoading ? (
-              <Skeleton h={218} r={20} />
+              <Skeleton h={218} r={8} />
             ) : (
               <div
                 style={{
-                  borderRadius: 20, padding: "20px", height: "100%",
-                  background: `linear-gradient(160deg, ${planInfo.bg}, rgba(17,17,23,0.9))`,
+                  borderRadius: 8, padding: "20px", height: "100%",
+                  background: "#11131a",
                   border: `1px solid ${planInfo.border}`,
                   display: "flex", flexDirection: "column",
                   position: "relative", overflow: "hidden",
                 }}
               >
-                <div style={{
-                  position: "absolute", top: -40, right: -40, width: 140, height: 140, borderRadius: "50%",
-                  background: `radial-gradient(circle, ${planInfo.color}22 0%, transparent 70%)`, pointerEvents: "none",
-                }} />
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, position: "relative" }}>
                   <div style={{
-                    width: 40, height: 40, borderRadius: 12, background: planInfo.bg,
+                    width: 40, height: 40, borderRadius: 8, background: planInfo.bg,
                     border: `1px solid ${planInfo.border}`,
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
@@ -446,7 +450,7 @@ export default function WalletPage() {
                   return (
                     <div key={tx.id ?? i} className="wallet-tx-row" style={{
                       display: "flex", alignItems: "center", gap: 12,
-                      padding: "12px 14px", borderRadius: 14,
+                      padding: "12px 14px", borderRadius: 8,
                       background: "rgba(255,255,255,0.03)",
                       border: "1px solid rgba(255,255,255,0.06)",
                     }}>
@@ -484,7 +488,7 @@ export default function WalletPage() {
                   onClick={() => setVisibleCount((v) => v + HISTORY_PAGE_SIZE)}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                    width: "100%", marginTop: 10, padding: "10px", borderRadius: 12,
+                    width: "100%", marginTop: 10, padding: "10px", borderRadius: 8,
                     background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)",
                     color: "rgba(255,255,255,0.55)", fontSize: 12.5, fontWeight: 600,
                     cursor: "pointer", fontFamily: "inherit",
@@ -513,8 +517,8 @@ export default function WalletPage() {
       <style>{`
         .wallet-view-plans-btn { transition: background-color 0.15s ease, border-color 0.15s ease; }
         .wallet-view-plans-btn:hover { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.18); }
-        .wallet-back-btn { transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease; }
-        .wallet-back-btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); transform: translateX(-2px); }
+        .wallet-back-btn { transition: background-color 0.15s ease, border-color 0.15s ease; }
+        .wallet-back-btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
         .wallet-tx-row { transition: background-color 0.15s ease, border-color 0.15s ease; }
         .wallet-tx-row:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
       `}</style>

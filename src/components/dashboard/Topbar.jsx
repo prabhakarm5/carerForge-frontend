@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Menu, Zap, User, Settings, LogOut, Shield, Star, Crown, Sparkles, ChevronLeft, AlertTriangle } from "lucide-react";
 import useAuthStore from "../../store/authStore";
+import { WORKSPACE_CONTEXT_EVENT } from "../../services/workspaceEvents";
+import BrandLogo from "../../shared/BrandLogo";
 
 /* ─── Design Tokens ──────────────────────────────────────────────── */
 const TOPBAR_H   = 40;
@@ -48,7 +50,7 @@ function Avatar({ user, size = 26 }) {
   const imgSrc = user?.profileImage || null;
   useEffect(() => { setImgError(false); }, [imgSrc]);
   const initials = user?.name
-    ? user.name.trim().split(/\s+/).map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+    ? user.name.trim().split(/\s+/).map((part) => part.match(/[A-Za-z0-9]/)?.[0]).filter(Boolean).join("").slice(0, 2).toUpperCase() || "U"
     : "U";
   const showImage = imgSrc && !imgError;
   return (
@@ -199,6 +201,7 @@ function ProfileDropdown({ user, wallet, open, onClose }) {
             </div>
 
             <div style={{ padding: "6px" }}>
+              {user?.role === "ROLE_ADMIN" && <DropItem icon={Shield} label="Admin console" onClick={() => { onClose(); navigate("/admin/dashboard"); }} />}
               <DropItem icon={User} label="View Profile" onClick={() => { onClose(); navigate("/profile"); }} />
               <DropItem icon={Zap} label="Plans & Tokens" onClick={() => { onClose(); navigate("/wallet"); }} />
               <DropItem icon={Settings} label="Settings" onClick={() => { onClose(); navigate("/settings"); }} />
@@ -324,12 +327,37 @@ function DropItem({ icon: Icon, label, onClick, danger = false }) {
 export default function Topbar({ setSidebarOpen, wallet }) {
   const user = useAuthStore((s) => s.user);
   const [showProfile, setShowProfile] = useState(false);
+  const [workspaceContext, setWorkspaceContext] = useState(null);
+  const location = useLocation();
+
+  const pageName = location.pathname.startsWith("/chat") ? "Chat"
+    : location.pathname.startsWith("/image-generator") ? "Image AI"
+    : location.pathname.startsWith("/resume") ? "Resume AI"
+    : location.pathname.startsWith("/wallet") ? "Wallet"
+    : location.pathname.startsWith("/profile") ? "Profile"
+    : location.pathname.startsWith("/settings") ? "Settings"
+    : "Dashboard";
+
+  const expectedContextKind = location.pathname.startsWith("/chat") ? "chat"
+    : location.pathname.startsWith("/resume") ? "resume"
+    : location.pathname.startsWith("/image-generator") ? "image"
+    : null;
+
+  useEffect(() => {
+    function handleContext(event) {
+      setWorkspaceContext(event.detail || null);
+    }
+    window.addEventListener(WORKSPACE_CONTEXT_EVENT, handleContext);
+    return () => window.removeEventListener(WORKSPACE_CONTEXT_EVENT, handleContext);
+  }, []);
+
+  const activeContext = workspaceContext?.kind === expectedContextKind ? workspaceContext : null;
 
   const headerStyle = {
-    position: "sticky", top: 0, zIndex: 30,
+    position: "sticky", top: 0, zIndex: 40, flexShrink: 0,
+    height: TOPBAR_H, minHeight: TOPBAR_H,
     width: "100%", boxSizing: "border-box",
     background: TOPBAR_BG,
-    backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
     borderBottom: `1px solid ${BORDER}`,
     boxShadow: "0 2px 10px rgba(0,0,0,0.35)",
   };
@@ -341,7 +369,14 @@ export default function Topbar({ setSidebarOpen, wallet }) {
           <Menu size={15} />
         </IBtn>
 
-        <div style={{ flex: 1, minWidth: 0 }} />
+        <div className="topbar-brand" style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8, paddingLeft: 6 }}>
+          <span className="topbar-shared-logo"><BrandLogo size="xs" /></span>
+
+          <span style={{ width: 1, height: 13, background: BORDER, flexShrink: 0 }} />
+          <span style={{ color: TEXT_MUTED, fontSize: 11.5, fontWeight: 650, flexShrink: 0, whiteSpace: "nowrap" }}>{pageName}</span>
+          {activeContext?.title && <span className="topbar-context-title" title={activeContext.title} style={{ color: "rgba(255,255,255,.68)", fontSize: 11.5, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}> / {activeContext.title}</span>}
+          {activeContext?.id != null && <span className="topbar-context-id" title={`ID: ${activeContext.id}`} style={{ color: "rgba(167,139,250,.75)", fontSize: 9.5, fontFamily: "ui-monospace, SFMono-Regular, monospace", flexShrink: 0 }}>#{String(activeContext.id).slice(0, 8)}</span>}
+        </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0, minWidth: 0 }}>
           <TokenBadge wallet={wallet} />
@@ -360,6 +395,12 @@ export default function Topbar({ setSidebarOpen, wallet }) {
         .topbar-ibtn:active { transform: translateY(1px) scale(0.96); }
         .topbar-avatar-btn { cursor: pointer; transition: transform 150ms ${EASE}; }
         .topbar-avatar-btn:active { transform: scale(0.92); }
+        @media (max-width: 420px) {
+          .topbar-brand { gap: 6px !important; padding-left: 2px !important; }
+          .topbar-shared-logo .brand-logo-text { display: none; }
+          .topbar-context-id { display: none; }
+          .topbar-context-title { max-width: 42vw; }
+        }
 
         .topbar-drop-item { transition: background 140ms ${EASE}, color 140ms ${EASE}; }
         .topbar-drop-item:hover { background: rgba(255,255,255,0.06); color: ${TEXT}; }

@@ -1,4 +1,5 @@
-import { Check, FileCheck2, ScanSearch, ShieldCheck, Sparkles, Flame, ArrowUpRight, Layers3 } from "lucide-react";
+import { Check, FileCheck2, ScanSearch, ShieldCheck, Sparkles, ArrowUpRight, Layers3 } from "lucide-react";
+import BrandLogo from "../../shared/BrandLogo";
 
 const features = [
   [FileCheck2, "ATS-ready resumes", "Clean structure that hiring systems can read.", "#22d3ee", "#2563eb"],
@@ -29,29 +30,11 @@ export default function AuthLeftPanel() {
             backgroundSize: "42px 42px",
           }}
         />
-        <div
-          className="absolute -top-24 -left-16 w-[380px] h-[380px] rounded-full blur-[110px]"
-          style={{ background: "radial-gradient(circle, rgba(245,158,11,0.2), transparent 70%)" }}
-        />
-        <div
-          className="absolute -bottom-32 -right-16 w-[420px] h-[420px] rounded-full blur-[120px]"
-          style={{ background: "radial-gradient(circle, rgba(124,58,237,0.22), transparent 70%)" }}
-        />
       </div>
 
       {/* Top bar */}
       <div className="relative z-10 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2.5">
-          <span
-            className="grid h-10 w-10 place-items-center rounded-xl shadow-[0_12px_28px_-10px_rgba(34,211,238,0.75)]"
-            style={{ background: "linear-gradient(135deg, #fbbf24, #d946ef 55%, #7c3aed)" }}
-          >
-            <Flame size={17} color="#ffffff" strokeWidth={2.5} />
-          </span>
-          <span className="font-black text-[14px] tracking-tight" style={{ color: "#ffffff" }}>
-            CareerForge AI
-          </span>
-        </div>
+        <BrandLogo size="md" />
         <span
           className="rounded-full px-3 py-1 text-[11px] font-bold"
           style={{ border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.7)" }}

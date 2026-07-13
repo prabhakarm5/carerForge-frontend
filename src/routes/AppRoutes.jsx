@@ -1,6 +1,6 @@
 // src/routes/AppRoutes.jsx
 
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
 
 // ================= PUBLIC PAGES =================
@@ -28,6 +28,7 @@ import ChatPage from "../pages/chat/ChatPage";
 import ProfilePage from "../pages/Profile/ProfilePage";
 import DashboardPage from "../pages/Dashboard/DashboardPage";
 import ImageGeneratorPage from "../pages/ImageGeneratorPage";
+import SettingsPage from "../pages/Settings/SettingsPage";
 
 // ? Actual path: src/pages/Wallet/walletPage.jsx
 // Isliye "walletPage" lowercase w ke saath rakha hai.
@@ -39,8 +40,11 @@ import PaymentFailedPage from "../pages/Payment/PaymentFailedPage";
 
 // ================= LAYOUTS / ROUTE GUARD =================
 import ProtectedRoute from "./ProtectedRoute";
+import AdminRoute from "./AdminRoute";
 import DashboardLayout from "../layouts/DashboardLayout";
 import PublicLayout from "../shared/PublicLayout";
+import useAuthStore from "../store/authStore";
+import { trackPageView } from "../services/telemetryService";
 
 // ================= DOCUMENTATION PAGES =================
 import UserDocumentation from "../document/UserDocumentation";
@@ -53,15 +57,20 @@ import PaymentPolicy from "../shared/Paymentpolicy";
 // ================= 404 =================
 import NotFound from "../pages/NotFound";
 
+const ResumeAIPage = lazy(() => import("../pages/ResumeAI/ResumeAIPage"));
+const JobsPage = lazy(() => import("../pages/Jobs/JobsPage"));
+const AdminLoginPage = lazy(() => import("../pages/Admin/AdminLoginPage"));
+const AdminDashboardPage = lazy(() => import("../pages/Admin/AdminDashboardPage"));
+
 const SITE_NAME = "CareerForge AI";
 
-// ✅ SINGLE SOURCE OF TRUTH — sirf yahan ek line add karo, tab title
+// Ã¢Å“â€¦ SINGLE SOURCE OF TRUTH Ã¢â‚¬â€ sirf yahan ek line add karo, tab title
 // har page pe automatic set ho jayega. Kisi bhi individual page file
 // ko chhoona nahi padega.
 //
 // Static paths: exact string match ("/dashboard").
 // Dynamic paths (jaise "/chat/:id"): key ke aage "*" laga do, jaise
-// "/chat/*" — iska matlab "/chat/" se shuru hone wala koi bhi path
+// "/chat/*" Ã¢â‚¬â€ iska matlab "/chat/" se shuru hone wala koi bhi path
 // isi title se match hoga (e.g. "/chat/abc123").
 const ROUTE_TITLES = {
     "/": "Home",
@@ -77,11 +86,15 @@ const ROUTE_TITLES = {
     "/verify-reset-otp": "Verify OTP",
     "/reset-password": "Reset Password",
     "/oauth/success": "Signing You In",
+    "/admin/login": "Admin Sign In",
+    "/admin/dashboard": "Admin Dashboard",
 
     "/dashboard": "Dashboard",
     "/chat": "Chat",
     "/chat/*": "Chat",
     "/image-generator": "AI Image Generator",
+    "/resume": "Resume AI",
+    "/jobs": "Live Jobs",
     "/profile": "Your Profile",
     "/wallet": "Wallet",
 
@@ -112,11 +125,11 @@ function resolveTitle(pathname) {
         }
     }
 
-    // 3. No match (unknown/404 route) — fall back to a generic label
+    // 3. No match (unknown/404 route) Ã¢â‚¬â€ fall back to a generic label
     return "Page Not Found";
 }
 
-// ✅ Runs once per route change, sets document.title automatically.
+// Ã¢Å“â€¦ Runs once per route change, sets document.title automatically.
 // Placed inside <Routes>'s parent, so it re-runs on every navigation
 // without needing to be added to any individual page component.
 function AutoPageTitle() {
@@ -124,16 +137,28 @@ function AutoPageTitle() {
 
     useEffect(() => {
         const title = resolveTitle(location.pathname);
-        document.title = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
+        document.title = title ? `${title} | ${SITE_NAME}` : SITE_NAME;
     }, [location.pathname]);
 
     return null;
 }
 
+function PageTelemetry() {
+    const location = useLocation();
+    const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+    useEffect(() => {
+        if (!isAuthenticated || location.pathname.startsWith("/admin")) return;
+        trackPageView(location.pathname).catch(() => {});
+    }, [isAuthenticated, location.pathname]);
+
+    return null;
+}
 export default function AppRoutes() {
     return (
         <>
             <AutoPageTitle />
+            <PageTelemetry />
 
             <Routes>
                 {/* ================================================================
@@ -169,6 +194,24 @@ export default function AppRoutes() {
                     <Route path="/oauth/success" element={<OAuthSuccessPage />} />
                 </Route>
 
+                <Route
+                    path="/admin/login"
+                    element={
+                        <Suspense fallback={<div className="admin-route-loader">Loading secure sign in...</div>}>
+                            <AdminLoginPage />
+                        </Suspense>
+                    }
+                />
+                <Route
+                    path="/admin/dashboard"
+                    element={
+                        <AdminRoute>
+                            <Suspense fallback={<div className="admin-route-loader">Loading admin dashboard...</div>}>
+                                <AdminDashboardPage />
+                            </Suspense>
+                        </AdminRoute>
+                    }
+                />
                 {/* ================================================================
                     PROTECTED ROUTES
                     Sirf logged-in user access kar sakta hai.
@@ -192,6 +235,25 @@ export default function AppRoutes() {
                     {/* AI image generator */}
                     <Route path="/image-generator" element={<ImageGeneratorPage />} />
 
+                    {/* Resume analysis, job matching and ATS PDF builder */}
+                    <Route
+                        path="/resume"
+                        element={
+                            <Suspense fallback={<div className="grid min-h-[45vh] place-items-center text-sm text-slate-400">Loading Resume AI...</div>}>
+                                <ResumeAIPage />
+                            </Suspense>
+                        }
+                    />
+
+                    {/* Live jobs from the configured provider */}
+                    <Route
+                        path="/jobs"
+                        element={
+                            <Suspense fallback={<div className="grid min-h-[45vh] place-items-center text-sm text-slate-400">Loading live jobs...</div>}>
+                                <JobsPage />
+                            </Suspense>
+                        }
+                    />
                     {/* Profile */}
                     <Route path="/profile" element={<ProfilePage />} />
 
@@ -202,11 +264,8 @@ export default function AppRoutes() {
                     <Route path="/payment/success" element={<PaymentSuccessPage />} />
                     <Route path="/payment/failed" element={<PaymentFailedPage />} />
 
-                    {/* Placeholder pages — baad mein real pages bana denge */}
-                    <Route
-                        path="/settings"
-                        element={<h1 className="p-10 text-white">Settings</h1>}
-                    />
+                    {/* Placeholder pages Ã¢â‚¬â€ baad mein real pages bana denge */}
+                    <Route path="/settings" element={<SettingsPage />} />
                     <Route
                         path="/history"
                         element={<h1 className="p-10 text-white">History</h1>}
@@ -234,11 +293,11 @@ export default function AppRoutes() {
                 <Route path="/payment-policy" element={<PaymentPolicy />} />
 
                 {/* ================================================================
-                    404 — CATCH-ALL
+                    404 ‚CATCH-ALL
                     Yeh HAMESHA sabse aakhri route hona chahiye. Jo bhi URL
                     upar ke kisi route se match na ho ("/chathik" jaisa
                     typo/random URL), woh yahan gir kar NotFound dikhayega
-                    — blank page ya router-crash ki jagah.
+                 blank page ya router-crash ki jagah.
                     ================================================================ */}
                 <Route path="*" element={<NotFound />} />
             </Routes>

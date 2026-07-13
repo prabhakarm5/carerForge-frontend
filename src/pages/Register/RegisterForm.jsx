@@ -1,9 +1,10 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Eye, EyeOff, Camera, Clock, AlertTriangle, Sparkles, Check, Flame, Zap } from "lucide-react";
+import { Eye, EyeOff, Camera, Clock, AlertTriangle, Check, Zap } from "lucide-react";
 import { registerUser } from "../../services/userAuthService";
 import SocialLogin from "../../components/auth/SocialLogin";
+import BrandLogo from "../../shared/BrandLogo";
 
 function extractSeconds(message) {
     if (!message) return 0;
@@ -187,7 +188,7 @@ function RegisterForm() {
     }
 
     return (
-        <div className="flex min-h-screen w-full overflow-hidden bg-[#0a0713]">
+        <div className="flex min-h-[100dvh] w-full overflow-hidden bg-[#0a0713]">
 
             {/* ── LEFT PANEL — "The Forge". Narrow, quiet, its own visual
                 identity: a single glowing molten-core signature instead of
@@ -196,16 +197,10 @@ function RegisterForm() {
                 the form. ── */}
             <aside className="hidden lg:flex w-[34%] flex-shrink-0 relative overflow-hidden bg-[#0a0713] border-r border-white/[0.06]">
                 {/* molten core glow */}
-                <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 h-[480px] w-[480px] rounded-full bg-gradient-to-br from-amber-500/25 via-fuchsia-500/20 to-violet-600/25 blur-[100px] animate-[pulse_7s_ease-in-out_infinite]" />
-                <div className="absolute bottom-[-15%] left-[-10%] h-[300px] w-[300px] rounded-full bg-violet-600/20 blur-[110px]" />
 
                 <div className="relative z-10 flex flex-col justify-between h-full w-full px-9 py-11">
-                    <div className="flex items-center gap-2.5">
-                        <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-amber-400 via-fuchsia-500 to-violet-600 shadow-[0_8px_20px_-4px_rgba(217,70,239,0.5)]">
-                            <Flame size={16} className="text-white" strokeWidth={2.5} />
-                        </span>
-                        <span className="text-white font-black text-[14px] tracking-tight">CareerForge AI</span>
-                    </div>
+                    <BrandLogo size="sm" />
+
 
                     {/* signature element: a single vertical "forge line" — three
                         stages of a career being shaped, read top to bottom */}
@@ -241,23 +236,15 @@ function RegisterForm() {
             </aside>
 
             {/* ── RIGHT FORM PANEL — compact, single scroll, colorful ── */}
-            <div className="flex-1 min-h-screen overflow-y-auto relative">
-                <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                    <div className="absolute -top-16 -left-10 h-56 w-56 rounded-full bg-violet-500/10 blur-[100px]" />
-                    <div className="absolute -bottom-20 -right-10 h-64 w-64 rounded-full bg-amber-400/10 blur-[100px]" />
-                </div>
+            <div className="flex-1 min-h-[100dvh] overflow-y-auto relative">
 
-                <div className="relative min-h-screen flex items-center justify-center px-4 py-6 md:px-6">
+                <div className="relative min-h-[100dvh] flex items-center justify-center px-4 py-6 md:px-6">
                     <div className="w-full max-w-[368px]">
 
-                        <div className="flex items-center gap-2 mb-4 lg:hidden">
-                            <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-amber-400 via-fuchsia-500 to-violet-600">
-                                <Flame size={14} className="text-white" strokeWidth={2.5} />
-                            </span>
-                            <span className="text-white font-black text-[14px] tracking-tight">CareerForge AI</span>
-                        </div>
+                        <div className="mb-4 lg:hidden"><BrandLogo size="xs" /></div>
 
-                        <div className="relative rounded-[1.35rem] border border-white/10 bg-white/[0.05] p-5 shadow-[0_30px_70px_-30px_rgba(0,0,0,0.75)] backdrop-blur-2xl">
+
+                        <div className="relative rounded-[1.35rem] border border-white/10 bg-white/[0.05] p-5 shadow-[0_30px_70px_-30px_rgba(0,0,0,0.75)]">
                             <div className="pointer-events-none absolute inset-0 rounded-[1.35rem] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]" />
 
                             <h1 className="text-[19px] font-black text-white tracking-tight">Create your account</h1>

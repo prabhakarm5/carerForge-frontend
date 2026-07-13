@@ -6,7 +6,7 @@ import {
   Image as ImageIcon, FileText,
   Zap, Globe, BookOpen, AlertTriangle, X,
   Maximize2, Download, ChevronLeft, ChevronDown,
-  Eye, EyeOff, Search, ThumbsUp, ThumbsDown,
+  Eye, EyeOff, ThumbsUp, ThumbsDown,
 } from "lucide-react";
 import { getConversation, getConversationStatus, getModels } from "../../services/conversationService";
 import { handleApiError } from "../../utils/errorHandler";
@@ -16,6 +16,8 @@ import ChatComposer from "./components/ChatComposer";
 import RichInlineText from "./components/RichInlineText";
 import ArtifactPanel from "./components/ArtifactPanel";
 import { notifyConversationsChanged } from "../../components/dashboard/Sidebar";
+import { publishWorkspaceContext } from "../../services/workspaceEvents";
+import { getWallet } from "../../services/walletService";
 
 // ─── Config ──────────────────────────────────────────────────────────────
 const SUGGESTIONS = [
@@ -170,23 +172,26 @@ function tokenizeLine(line, lang) {
 }
 
 function HighlightedCode({ code, lang }) {
-  const lines = useMemo(() => code.split("\n"), [code]);
-  return (
-    <>
-      {lines.map((line, i) => (
-        <div key={i} style={{ minHeight: "1.6em" }}>
-          {line.length === 0
-            ? "\u00A0"
-            : tokenizeLine(line, lang.toLowerCase()).map((t, j) => (
-                <span key={j} style={{
-                  color: TOKEN_COLORS[t.type] || TOKEN_COLORS.plain,
-                  fontStyle: t.type === "comment" ? "italic" : "normal",
-                }}>{t.text}</span>
-              ))}
-        </div>
-      ))}
-    </>
-  );
+  // Whole split+tokenize+JSX-build pass wrapped in ONE useMemo, so it only
+  // reruns when code/lang actually change — not on every incidental
+  // re-render of the parent message.
+  const rendered = useMemo(() => {
+    const lines = code.split("\n");
+    return lines.map((line, i) => (
+      <div key={i} style={{ minHeight: "1.6em" }}>
+        {line.length === 0
+          ? "\u00A0"
+          : tokenizeLine(line, lang.toLowerCase()).map((t, j) => (
+              <span key={j} style={{
+                color: TOKEN_COLORS[t.type] || TOKEN_COLORS.plain,
+                fontStyle: t.type === "comment" ? "italic" : "normal",
+              }}>{t.text}</span>
+            ))}
+      </div>
+    ));
+  }, [code, lang]);
+
+  return <>{rendered}</>;
 }
 
 // ─── Mobile detection hook ──────────────────────────────────────────────
@@ -202,6 +207,46 @@ function useIsMobile(breakpoint = 768) {
     return () => mq.removeEventListener("change", handler);
   }, [breakpoint]);
   return isMobile;
+}
+
+// ─── Throttle a fast-changing value (streaming text) ───────────────────
+// While an answer streams, `content` grows on every SSE chunk — sometimes
+// many times a second. Re-running the full markdown block-parser on the
+// ENTIRE accumulated string on every single chunk is O(total length so far)
+// per chunk, so over one long response the total work is O(n²). That is
+// the real reason the UI hangs / scroll feels stuck while a reply is being
+// generated — the main thread is busy re-parsing, it's not a CSS/scroll bug.
+// This caps how often the expensive parse can re-fire (delayMs) while still
+// flushing the true, final value immediately once delayMs is 0 (i.e. once
+// streaming is done).
+function useThrottledValue(value, delayMs) {
+  const [throttled, setThrottled] = useState(value);
+  const lastRef = useRef(0);
+  const timeoutRef = useRef(null);
+
+  useEffect(() => {
+    if (!delayMs) {
+      clearTimeout(timeoutRef.current);
+      lastRef.current = Date.now();
+      setThrottled(value);
+      return;
+    }
+    const now = Date.now();
+    const elapsed = now - lastRef.current;
+    if (elapsed >= delayMs) {
+      lastRef.current = now;
+      setThrottled(value);
+    } else {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        lastRef.current = Date.now();
+        setThrottled(value);
+      }, delayMs - elapsed);
+    }
+    return () => clearTimeout(timeoutRef.current);
+  }, [value, delayMs]);
+
+  return throttled;
 }
 
 // ─── Parse markdown into blocks ──────────────────────────────────────────
@@ -401,7 +446,7 @@ function CodeBlock({ lang, content, onOpenPanel, isStreaming = false }) {
 
       <pre style={{
         overflow: "auto", padding: "16px 18px",
-        margin: 0, fontSize: 12.5,
+        margin: 0, fontSize: 12.5, color: "#d8dee9", background: "#0d1117",
         fontFamily: "'JetBrains Mono','Fira Code',monospace",
         lineHeight: 1.7,
         maxHeight: 420,
@@ -478,7 +523,10 @@ function TableBlock({ header, rows }) {
 
 // ─── Rendered Message ────────────────────────────────────────────────────
 function RenderedMessage({ content, onOpenPanel, isStreaming = false }) {
-  const blocks = useMemo(() => parseContent(content), [content]);
+  // Re-parse at most ~8x/sec while streaming; flush the exact final text
+  // the instant streaming ends (delayMs becomes 0 → immediate).
+  const throttledContent = useThrottledValue(content, isStreaming ? 120 : 0);
+  const blocks = useMemo(() => parseContent(throttledContent), [throttledContent]);
   let listBuffer = [];
   let listType = null;
 
@@ -556,7 +604,7 @@ function RenderedMessage({ content, onOpenPanel, isStreaming = false }) {
   });
 
   if (listBuffer.length) rendered.push(flushList("list-end"));
-  return <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>{rendered}</div>;
+  return <div className="assistant-rendered" style={{ display: "flex", flexDirection: "column", gap: 1 }}>{rendered}</div>;
 }
 
 // ─── Copy / action buttons (message level) ────────────────────────────────
@@ -592,65 +640,6 @@ function CopyBtn({ text }) {
   );
 }
 
-// ─── Thought Trail (Claude-style "thinking" / reasoning steps) ───────────
-// Renders whatever step labels the backend streams via the `thought` SSE
-// event (see chatStreamStore.js -> streamsById[key].thoughts). Collapsible,
-// auto-scrolls to the newest step while open + still streaming.
-function ThoughtTrail({ thoughts, streaming }) {
-  const [open, setOpen] = useState(true);
-  const bodyRef = useRef(null);
-
-  useEffect(() => {
-    if (open && streaming && bodyRef.current) {
-      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-    }
-  }, [thoughts, open, streaming]);
-
-  if (!thoughts || thoughts.length === 0) return null;
-
-  return (
-    <div style={{
-      margin: "0 0 10px", borderRadius: 12, overflow: "hidden",
-      border: "1px solid rgba(167,139,250,0.2)",
-      background: "rgba(124,58,237,0.06)",
-    }}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{
-          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "9px 13px", background: "transparent", border: "none", cursor: "pointer",
-          fontFamily: "inherit",
-        }}
-      >
-        <span style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 700, color: "#a78bfa" }}>
-          <Search size={12} style={{ animation: streaming ? "pulse 1.6s infinite" : "none" }} />
-          {streaming ? "Thinking" : "Thought process"}
-          <span style={{ fontSize: 10.5, fontWeight: 600, color: "#7c6aa8" }}>({thoughts.length})</span>
-        </span>
-        <ChevronDown size={13} color="#7c6aa8" style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
-      </button>
-      {open && (
-        <div
-          ref={bodyRef}
-          style={{
-            maxHeight: 150, overflowY: "auto",
-            padding: "0 14px 11px",
-            display: "flex", flexDirection: "column", gap: 6,
-            overscrollBehavior: "contain",
-          }}
-        >
-          {thoughts.map((th, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-              <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#a78bfa", marginTop: 7, flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.65 }}>{th}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Message Row ──────────────────────────────────────────────────────────
 const LONG_DOC_THRESHOLD = 1400;
 const ATTACHMENT_PATTERN = /^\[\[ATTACHMENT:([^\]]+)\]\]\n([\s\S]*?)\n\[\[\/ATTACHMENT\]\]\n?([\s\S]*)$/;
@@ -661,7 +650,7 @@ function parseTextAttachment(content = "") {
   return { name: match[1], fileContent: match[2], note: match[3]?.trim() || "" };
 }
 
-const MessageRow = memo(function MessageRow({ role, content, image, isStreaming = false, onOpenPanel, onRetry }) {
+const MessageRow = memo(function MessageRow({ role, content, image, isStreaming = false, onOpenPanel, onRetry, retryIndex }) {
   const [downloaded, setDownloaded] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const isUser = role === "USER" || role === "user";
@@ -676,7 +665,7 @@ const MessageRow = memo(function MessageRow({ role, content, image, isStreaming 
 
   if (isUser) {
     return (
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+      <div className="user-message-row" style={{ display: "flex", justifyContent: "flex-end" }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, maxWidth: "min(88%, 680px)" }}>
           {image && (
             <img src={image} alt="attached" style={{
@@ -703,7 +692,7 @@ const MessageRow = memo(function MessageRow({ role, content, image, isStreaming 
           )}
 
           {visibleUserText && (
-            <div style={{
+            <div className="user-message-bubble" style={{
               padding: "10px 14px",
               borderRadius: "16px 16px 4px 16px",
               background: "linear-gradient(135deg,rgba(124,58,237,0.85),rgba(219,39,119,0.75))",
@@ -725,8 +714,8 @@ const MessageRow = memo(function MessageRow({ role, content, image, isStreaming 
   }
 
   return (
-    <div style={{ display: "flex", gap: 10 }}>
-      <div style={{
+    <div className="assistant-message-row" style={{ display: "flex", gap: 10 }}>
+      <div className="assistant-message-avatar" style={{
         width: 32, height: 32, borderRadius: 9, flexShrink: 0, marginTop: 2,
         background: "linear-gradient(135deg,#7c3aed,#db2777)",
         display: "flex", alignItems: "center", justifyContent: "center",
@@ -748,11 +737,11 @@ const MessageRow = memo(function MessageRow({ role, content, image, isStreaming 
         )}
 
         {!isStreaming && content && (
-          <div style={{ marginTop: 5, marginLeft: -6, display: "flex", alignItems: "center", gap: 1, opacity: 0.7 }}>
+          <div className="message-actions" style={{ marginTop: 5, marginLeft: -6, display: "flex", alignItems: "center", gap: 1, opacity: 0.7 }}>
             <CopyBtn text={content} />
             <ActionBtn icon={ThumbsUp} doneIcon={ThumbsUp} label="Like" doneLabel="Liked" done={feedback === "up"} onClick={() => setFeedback(feedback === "up" ? null : "up")} />
             <ActionBtn icon={ThumbsDown} doneIcon={ThumbsDown} label="Dislike" doneLabel="Disliked" done={feedback === "down"} onClick={() => setFeedback(feedback === "down" ? null : "down")} />
-            {onRetry && <ActionBtn icon={RotateCcw} label="Retry" onClick={onRetry} />}
+            {onRetry && <ActionBtn icon={RotateCcw} label="Retry" onClick={() => onRetry(retryIndex)} />}
             {isLongDoc && (
               <>
                 <span style={{ width: 1, height: 12, background: "rgba(255,255,255,0.08)" }} />
@@ -780,39 +769,6 @@ const MessageRow = memo(function MessageRow({ role, content, image, isStreaming 
     </div>
   );
 });
-// ─── Live Status Row ───────────────────────────────────────────────────
-function ThinkingRow({ label = "thinking" }) {
-  const isGenerating = label === "generating";
-  const displayText = isGenerating ? "Writing…" : "Thinking…";
-  const Icon = isGenerating ? PenLine : Search;
-
-  return (
-    <div style={{ display: "flex", gap: 12 }}>
-      <div style={{
-        width: 38, height: 38, borderRadius: 13, flexShrink: 0,
-        background: "linear-gradient(135deg,#7c3aed,#db2777)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <Sparkles size={17} color="#fff" style={{ animation: "pulse 1.5s infinite" }} />
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 8 }}>
-        <Icon size={12} color="#a78bfa" style={{ animation: isGenerating ? "none" : "pulse 1.6s infinite" }} />
-        <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 500 }}>{displayText}</span>
-        <div style={{ display: "flex", gap: 5 }}>
-          {[0, 1, 2].map(i => (
-            <span key={i} style={{
-              width: 6, height: 6, borderRadius: "50%",
-              background: "rgba(167,139,250,0.6)", display: "block",
-              animation: "thinkDot 1.4s ease-in-out infinite",
-              animationDelay: `${i * 0.22}s`,
-            }} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Model Auto-Switch Toast ──────────────────────────────────────────────
 function ModelSwitchToast({ message }) {
   if (!message) return null;
@@ -885,7 +841,7 @@ function ErrorBanner({ type, onRecharge, onDismiss }) {
 // ─── Empty / Welcome State ─────────────────────────────────────────────────
 function EmptyState({ onSuggest }) {
   return (
-    <div style={{
+    <div className="chat-empty-state" style={{
       display: "flex", flexDirection: "column", alignItems: "center",
       justifyContent: "center", minHeight: "55vh",
       padding: "0 16px 16px", textAlign: "center", userSelect: "none",
@@ -916,7 +872,7 @@ function EmptyState({ onSuggest }) {
         display: "grid", gridTemplateColumns: "repeat(2, 1fr)",
         gap: 10, width: "100%", maxWidth: 500,
       }}
-        className="sm:grid-cols-3"
+        className="chat-suggestion-grid sm:grid-cols-3"
       >
         {SUGGESTIONS.map((s, i) => {
           const Icon = s.icon;
@@ -1184,7 +1140,7 @@ export default function ChatPage() {
   const [errorBanner,    setErrorBanner]    = useState(null);
   const [rechargeOpen,   setRechargeOpen]   = useState(false);
   const [codePanel,      setCodePanel]      = useState(null);
-
+  const [conversationTitle, setConversationTitle] = useState("");
   // ── Models: instant from cache, then silently revalidate once/session ──
   const [models, setModels] = useState(() => loadCachedModels() || []);
   const [selectedModelId, setSelectedModelId] = useState(
@@ -1253,6 +1209,7 @@ export default function ChatPage() {
   const textareaRef  = useRef(null);
   const skipLoadRef  = useRef(false);
   const isAtBottomRef = useRef(true);
+  const followOutputRef = useRef(true);
   const committedRef = useRef(new Set());
 
   const isStreamingHere = !!liveStream && !liveStream.done;
@@ -1260,21 +1217,17 @@ export default function ChatPage() {
   const isBusy            = isStreamingHere || isWaiting;
   const showEmptyState   = !loadingHistory && !historyError && messages.length === 0 && !liveStream;
 
-  // ── Scroll handling ──────────────────────────────────────────────────
-  // Only ever auto-scroll to the bottom when the user is ALREADY at (or
-  // very near) the bottom. The moment the user scrolls up even slightly —
-  // via mouse wheel, trackpad, or touch — we stop forcing them back down.
-  // The `wheel` listener below reacts instantly (no throttling) so an
-  // upward scroll intent is respected immediately, before the throttled
-  // `scroll` handler even runs.
   const NEAR_BOTTOM_PX = 120;
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     let ticking = false;
     function compute() {
-      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const atBottom = distance < NEAR_BOTTOM_PX;
       isAtBottomRef.current = atBottom;
+      if (distance <= 8) followOutputRef.current = true;
+      else if (!atBottom) followOutputRef.current = false;
       setShowScrollBtn(!atBottom);
       ticking = false;
     }
@@ -1284,6 +1237,7 @@ export default function ChatPage() {
     function onWheel(e) {
       if (e.deltaY < 0) {
         isAtBottomRef.current = false;
+        followOutputRef.current = false;
         setShowScrollBtn(true);
       }
     }
@@ -1296,21 +1250,39 @@ export default function ChatPage() {
     };
   }, [loadingHistory]);
 
-  // ── History load: cache-first (instant), then revalidate in background ──
+  useEffect(() => {
+    if (!isMobile || !window.visualViewport) return undefined;
+    const viewport = window.visualViewport;
+    function keepComposerAboveKeyboard() {
+      const shouldFollow = followOutputRef.current || document.activeElement === textareaRef.current;
+      if (!shouldFollow) return;
+      window.requestAnimationFrame(() => {
+        const element = scrollRef.current;
+        if (element) element.scrollTop = element.scrollHeight;
+      });
+    }
+    viewport.addEventListener("resize", keepComposerAboveKeyboard);
+    return () => viewport.removeEventListener("resize", keepComposerAboveKeyboard);
+  }, [isMobile]);
+  useEffect(() => {
+    publishWorkspaceContext({ kind: "chat", title: liveStream?.latestTitle || conversationTitle || (id ? "Conversation" : "New chat"), id: id || null });
+  }, [conversationTitle, id, liveStream?.latestTitle]);
+
   useEffect(() => {
     if (skipLoadRef.current) { skipLoadRef.current = false; return; }
-    if (!id) { setMessages([]); setHistoryError(false); return; }
+    if (!id) { setMessages([]); setConversationTitle(""); setHistoryError(false); return; }
     loadHistory(id);
   }, [id]);
 
-  // Direct scrollTop write on the chat container ONLY — never
-  // scrollIntoView(). scrollIntoView walks up every scrollable ancestor
-  // and can end up scrolling the whole page along with the inner panel,
-  // which is what read as "poora screen hilna / niche jaata rehta hai".
-  // Writing scrollTop on a single element is also far cheaper (no forced
-  // layout of ancestors), which matters a lot during streaming when this
-  // can fire many times per second.
-  // The main chat viewport never auto-scrolls while an answer streams.
+  useEffect(() => {
+    if (!liveStream?.text || !followOutputRef.current) return;
+    const frame = requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (el && followOutputRef.current) el.scrollTop = el.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [liveStream?.text]);
+
   useEffect(() => {
     if (!liveStream || !liveStream.done) return;
     if (committedRef.current.has(liveStream.streamId)) return;
@@ -1336,11 +1308,6 @@ export default function ChatPage() {
     return () => clearTimeout(t2);
   }, [liveStream, streamKey, setWallet, clearStream, id, tempKey]);
 
-  // An "error" event arriving AFTER real text has already streamed in
-  // (e.g. a late, non-fatal hiccup during the server's final save step)
-  // should NOT surface the generic "something went wrong" banner — the
-  // answer is already complete and correct on screen. Token-exhaustion
-  // always surfaces since it needs action from the user.
   useEffect(() => {
     if (!liveStream?.error) return;
     const code = liveStream.error.code;
@@ -1351,22 +1318,11 @@ export default function ChatPage() {
       setRechargeOpen(true);
       return;
     }
-    if (hasText) return; // answer already delivered — don't flag it as an error
+    if (hasText) return;
     if (code === "RATE_LIMIT" || code === "GROQ_BUSY") setErrorBanner(code);
     else setErrorBanner("GENERAL");
   }, [liveStream?.error, liveStream?.text]);
 
-  // ── Safety net: stall watchdog ────────────────────────────────────────
-  // FIX (root cause of "bina refresh ke response nahi dikhta"): the backend
-  // saves the assistant message to the DB the moment it finishes generating
-  // — that's WHY a manual refresh always shows it. But if the SSE
-  // connection itself glitches for any reason before the browser receives
-  // the "done" event, the frontend has no way of knowing the answer is
-  // actually ready, and sits there "waiting" forever. This watchdog: if a
-  // stream goes quiet (no chunk/thought/status update) for STALL_TIMEOUT_MS,
-  // silently re-fetches the conversation from the server in the background.
-  // If the DB already has the finished answer, it appears immediately —
-  // no refresh needed.
   const STALL_TIMEOUT_MS = 25000;
 
   const reconcileStalledStream = useCallback(async (key) => {
@@ -1398,12 +1354,6 @@ export default function ChatPage() {
     return () => clearTimeout(timer);
   }, [liveStream, streamKey, reconcileStalledStream]);
 
-  // ── Safety net: resync when the tab regains focus ───────────────────────
-  // Claude-style behavior: if something finished while this tab was in the
-  // background (or the device was asleep), catch up silently instead of
-  // making the user hit refresh.
-  // A tiny status request keeps an open chat in sync with deletions made
-  // on another device without downloading the conversation again.
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
@@ -1470,6 +1420,7 @@ export default function ChatPage() {
     try {
       const data = await getConversation(conversationId);
       const msgs = data?.messages || [];
+      setConversationTitle(data?.title || "Conversation");
       setMessages(msgs);
       saveCachedConversation(conversationId, msgs);
       if (!cached) {
@@ -1483,7 +1434,6 @@ export default function ChatPage() {
     }
   }
 
-  // ── Send ──────────────────────────────────────────────────────────────
   const handleSend = useCallback((textOverride) => {
     const text = (textOverride ?? input).trim();
     const textFile = textOverride == null ? attachedText : null;
@@ -1494,6 +1444,8 @@ export default function ChatPage() {
       : text;
 
     setErrorBanner(null);
+    followOutputRef.current = true;
+    isAtBottomRef.current = true;
     setMessages(prev => [...prev, {
       role: "USER",
       content: messageToSend,
@@ -1529,6 +1481,17 @@ export default function ChatPage() {
       onError: () => {},
     });
   }, [id, input, isBusy, tempKey, startStream, navigate, attachedImage, attachedText, selectedModelId, modelSupportsVision]);
+  const handleRetry = useCallback((messageIndex) => {
+    if (isBusy) return;
+    for (let previous = messageIndex - 1; previous >= 0; previous -= 1) {
+      const candidate = messages[previous];
+      if (candidate.role === "USER" || candidate.role === "user") {
+        handleSend(candidate.content);
+        return;
+      }
+    }
+  }, [isBusy, messages, handleSend]);
+
   function handleStop() {
     stopStreamFn(streamKey);
   }
@@ -1540,7 +1503,6 @@ export default function ChatPage() {
     }
   }
 
-  // ── Layout ────────────────────────────────────────────────────────────
   const CONTENT_MAX_WIDTH = isMobile ? "100%" : "min(880px, 95vw)";
 
   return (
@@ -1555,12 +1517,12 @@ export default function ChatPage() {
         @keyframes fadeUp  { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
         @keyframes slideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
         @keyframes slideInRight { from{opacity:0;transform:translateX(16px)} to{opacity:1;transform:translateX(0)} }
-        @keyframes thinkDot {
-          0%,80%,100%{transform:scale(0.6);opacity:0.3}
-          40%{transform:scale(1);opacity:1}
-        }
         @keyframes msgIn { from{opacity:0;transform:translateY(10px) scale(0.985)} to{opacity:1;transform:translateY(0) scale(1)} }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes thinkingDot { 0%,70%,100%{opacity:.25;transform:translateY(0)} 35%{opacity:1;transform:translateY(-2px)} }
+        .assistant-thinking { display:flex;align-items:center;gap:4px;width:max-content;margin-left:42px;padding:7px 10px;border:1px solid rgba(255,255,255,.07);border-radius:10px;background:rgba(255,255,255,.035);color:#94a3b8;font-size:12px; }
+        .assistant-thinking i { width:4px;height:4px;border-radius:50%;background:#a78bfa;animation:thinkingDot 1.1s infinite; }
+        .assistant-thinking i:nth-of-type(2){animation-delay:.14s}.assistant-thinking i:nth-of-type(3){animation-delay:.28s}
         .chat-scroll-area {
           overflow-anchor: none;
           scroll-behavior: auto;
@@ -1600,10 +1562,27 @@ export default function ChatPage() {
         .chat-composer-send:disabled { color: #465166; border-color: rgba(255,255,255,.05); background: rgba(255,255,255,.04); box-shadow: none; cursor: not-allowed; }
         .chat-composer-stop { color: #fda4af; background: rgba(244,63,94,.12); border-color: rgba(244,63,94,.22); box-shadow: none; }
         @media (max-width: 767px) {
-          .chat-composer-box { padding: 7px 8px; border-radius: 14px; }
-          .chat-composer-input { min-height: 30px; max-height: 78px; padding: 3px 4px 5px; font-size: 16px; line-height: 1.45; }
-          .chat-composer-toolbar { min-height: 32px; }
-          .chat-composer-icon, .chat-composer-send { width: 32px; height: 32px; flex-basis: 32px; border-radius: 8px; }
+          .chat-composer-box { padding: 5px 6px; border-radius: 12px; }
+          .chat-composer-input { min-height: 27px; max-height: 68px; padding: 2px 3px 4px; font-size: 14px; line-height: 1.42; }
+          .chat-composer-toolbar { min-height: 29px; }
+          .chat-composer-icon, .chat-composer-send { width: 29px; height: 29px; flex-basis: 29px; border-radius: 8px; }
+          .assistant-rendered p, .assistant-rendered li { font-size: 13.5px !important; line-height: 1.62 !important; }
+          .assistant-rendered h1 { font-size: 17px !important; margin: 10px 0 4px !important; }
+          .assistant-rendered h2 { font-size: 15.5px !important; margin: 9px 0 4px !important; }
+          .assistant-rendered h3 { font-size: 12.5px !important; margin: 8px 0 3px !important; }
+          .user-message-bubble { padding: 8px 11px !important; font-size: 13px !important; line-height: 1.5 !important; border-radius: 14px 14px 4px 14px !important; }
+          .assistant-message-row { gap: 7px !important; }
+          .assistant-message-avatar { width: 26px !important; height: 26px !important; border-radius: 8px !important; margin-top: 1px !important; }
+          .assistant-message-avatar svg { width: 12px; height: 12px; }
+          .message-actions { margin-top: 2px !important; margin-left: -3px !important; gap: 0 !important; }
+          .message-actions button { width: 27px; height: 27px; padding: 0 !important; justify-content: center; }
+          .message-actions button span { display: none; }
+          .chat-empty-state { min-height: 48vh !important; padding: 6px 2px 10px !important; }
+          .chat-empty-state > div:first-child { transform: scale(.7); margin-bottom: 8px !important; }
+          .chat-empty-state > h2 { font-size: 21px !important; margin-bottom: 5px !important; letter-spacing: 0 !important; }
+          .chat-empty-state > p { font-size: 11.5px !important; margin-bottom: 18px !important; }
+          .chat-suggestion-grid { gap: 6px !important; }
+          .chat-suggestion-grid button { padding: 9px !important; border-radius: 10px !important; }
         }
         .artifact-scroll { overscroll-behavior: contain; }
         .artifact-scroll::-webkit-scrollbar { width: 8px; }
@@ -1619,7 +1598,7 @@ export default function ChatPage() {
       }}>
 
         <div ref={scrollRef} className="chat-scroll-area" style={{ flex: "1 1 auto", overflowY: "auto", minHeight: 0 }}>
-          <div style={{ maxWidth: CONTENT_MAX_WIDTH, margin: "0 auto", padding: isMobile ? "12px 10px 14px" : "28px 20px 24px" }}>
+          <div style={{ maxWidth: CONTENT_MAX_WIDTH, margin: "0 auto", padding: isMobile ? "8px 8px 10px" : "28px 20px 24px" }}>
 
             {loadingHistory && (
               <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
@@ -1652,7 +1631,7 @@ export default function ChatPage() {
             )}
 
             {!loadingHistory && !historyError && (
-              <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? 22 : 32 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? 14 : 32 }}>
                 {messages.map((msg, i) => (
                   <div key={i} className="msg-block">
                     <MessageRow
@@ -1660,16 +1639,16 @@ export default function ChatPage() {
                       content={msg.content}
                       image={msg.image}
                       onOpenPanel={setCodePanel}
+                      onRetry={msg.role !== "USER" && msg.role !== "user" ? handleRetry : undefined}
+                      retryIndex={i}
                     />
                   </div>
                 ))}
-
-                {liveStream?.thoughts?.length > 0 && !committedRef.current.has(liveStream?.streamId) && (
-                  <div className="msg-block" style={{ marginLeft: isMobile ? 0 : 46 }}>
-                    <ThoughtTrail thoughts={liveStream.thoughts} streaming={!liveStream.done} />
+                {isWaiting && (
+                  <div className="assistant-thinking" role="status" aria-live="polite">
+                    <span>Thinking</span><i /><i /><i />
                   </div>
                 )}
-
                 {liveStream && liveStream.text && !committedRef.current.has(liveStream?.streamId) && (
                   <div className="msg-block">
                     <MessageRow
@@ -1686,13 +1665,6 @@ export default function ChatPage() {
                     <ModelSwitchToast message={liveStream.modelSwitchNotice} />
                   </div>
                 )}
-
-                {isWaiting && (
-                  <div className="msg-block">
-                    <ThinkingRow label={liveStream?.statusLabel} />
-                  </div>
-                )}
-
                 {errorBanner && (
                   <ErrorBanner
                     type={errorBanner}
@@ -1709,11 +1681,11 @@ export default function ChatPage() {
 
         {showScrollBtn && !showEmptyState && (
           <div style={{
-            position: "absolute", bottom: isMobile ? 78 : 84, left: "50%", transform: "translateX(-50%)",
+            position: "absolute", bottom: isMobile ? 66 : 84, left: "50%", transform: "translateX(-50%)",
             zIndex: 20, animation: "fadeUp 0.15s ease-out",
           }}>
             <button
-              onClick={() => { isAtBottomRef.current = true; scrollToBottom(); }}
+              onClick={() => { isAtBottomRef.current = true; followOutputRef.current = true; scrollToBottom(); }}
               style={{
                 display: "flex", alignItems: "center", gap: 7,
                 padding: "7px 14px", borderRadius: 99,
@@ -1739,7 +1711,7 @@ export default function ChatPage() {
           borderTop: "1px solid rgba(255,255,255,0.05)",
           background: "rgba(5,8,16,0.97)",
           backdropFilter: "blur(20px)",
-          padding: isMobile ? "6px 8px calc(7px + env(safe-area-inset-bottom))" : "12px 20px 14px",
+          padding: isMobile ? "4px 6px calc(5px + env(safe-area-inset-bottom))" : "12px 20px 14px",
         }}>
           <div style={{ maxWidth: CONTENT_MAX_WIDTH, margin: "0 auto" }}>
 
@@ -1754,6 +1726,8 @@ export default function ChatPage() {
               isBusy={isBusy}
               attachedImage={attachedImage}
               setAttachedImage={setAttachedImage}
+              attachedText={attachedText}
+              setAttachedText={setAttachedText}
               fileInputRef={fileInputRef}
               onPickImage={handlePickImage}
               modelSupportsVision={modelSupportsVision}
@@ -1786,6 +1760,7 @@ export default function ChatPage() {
         open={rechargeOpen}
         reason="tokens"
         onClose={() => setRechargeOpen(false)}
+        onActivated={() => getWallet().then(setWallet).catch(() => {})}
       />
     </div>
   );

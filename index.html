@@ -5,8 +5,54 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#07060e" />
-    <meta name="description" content="CareerForge AI — AI-tailored resumes, interview practice, and career tools." />
-    <title>CareerForge AI</title>
+
+    <!-- ✅ Primary SEO tags — values now come from .env via Vite's
+         Vite environment placeholder syntax, not hardcoded -->
+    <title>%VITE_SITE_TITLE%</title>
+    <meta name="description" content="%VITE_SITE_DESCRIPTION%" />
+    <meta
+      name="keywords"
+      content="AI resume builder, ATS resume checker, AI career chat, AI coding assistant, interview preparation AI, resume optimization, career tools"
+    />
+    <meta name="author" content="%VITE_SITE_NAME%" />
+    <link rel="canonical" href="%VITE_SITE_URL%/" />
+
+    <!-- ✅ Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="%VITE_SITE_NAME%" />
+    <meta property="og:title" content="%VITE_SITE_TITLE%" />
+    <meta property="og:description" content="%VITE_SITE_DESCRIPTION%" />
+    <meta property="og:image" content="%VITE_SITE_URL%/og-preview.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="%VITE_SITE_URL%/" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- ✅ Twitter / X card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="%VITE_SITE_TITLE%" />
+    <meta name="twitter:description" content="%VITE_SITE_DESCRIPTION%" />
+    <meta name="twitter:image" content="%VITE_SITE_URL%/og-preview.png" />
+
+    <!-- ✅ Robots -->
+    <meta name="robots" content="index, follow" />
+
+    <!-- ✅ Structured data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "%VITE_SITE_NAME%",
+        "url": "%VITE_SITE_URL%/",
+        "description": "%VITE_SITE_DESCRIPTION%",
+        "applicationCategory": "BusinessApplication",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
