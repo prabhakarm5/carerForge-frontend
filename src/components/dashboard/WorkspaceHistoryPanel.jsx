@@ -1,15 +1,32 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FileText, Image as ImageIcon, LoaderCircle, RotateCcw, Search, Trash2, X } from "lucide-react";
+import { FileText, Image as ImageIcon, LoaderCircle, Mail, RotateCcw, Search, Trash2, Video, X } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import { deleteImage, getImageHistory } from "../../services/imageService";
 import { deleteResumeProject, getResumeProjects } from "../../services/resumeService";
+import { deleteCoverLetter, getCoverLetters } from "../../services/coverLetterService";
+import { deleteInterview, getInterviews } from "../../services/interviewService";
 import { WORKSPACE_HISTORY_EVENT, notifyWorkspaceHistoryChanged } from "../../services/workspaceEvents";
 
 const CONFIG = {
+  interview: {
+    label: "interviews",
+    itemName: "interview",
+    deleted: "Interview deleted",
+    empty: "No practice sessions yet",
+    Icon: Video,
+    load: getInterviews,
+    remove: deleteInterview,
+    title: (item) => `${item.role || "Interview"}${item.company ? ` at ${item.company}` : ""}`,
+    meta: (item) => item.status === "COMPLETED" ? `${item.overallScore ?? 0}/100` : `${item.answeredQuestions ?? 0}/${item.totalQuestions ?? 0} answered`,
+    queryKey: "session",
+    route: "/interview",
+  },
   resume: {
     label: "resume analyses",
+    itemName: "resume analysis",
+    deleted: "Resume analysis deleted",
     empty: "No resume analyses yet",
     Icon: FileText,
     load: getResumeProjects,
@@ -19,8 +36,23 @@ const CONFIG = {
     queryKey: "project",
     route: "/resume",
   },
+  coverLetter: {
+    label: "cover letters",
+    empty: "No cover letters yet",
+    itemName: "cover letter",
+    deleted: "Cover letter deleted",
+    Icon: Mail,
+    load: getCoverLetters,
+    remove: deleteCoverLetter,
+    title: (item) => `${item.role || "Role"} at ${item.company || "Company"}`,
+    meta: (item) => item.styleLabel || "Professional",
+    queryKey: "letter",
+    route: "/cover-letter",
+  },
   image: {
     label: "images",
+    itemName: "image",
+    deleted: "Image deleted",
     empty: "No generated images yet",
     Icon: ImageIcon,
     load: getImageHistory,
@@ -81,14 +113,14 @@ export default function WorkspaceHistoryPanel({ kind }) {
 
   async function remove(event, item) {
     event.stopPropagation();
-    if (!window.confirm(`Delete this ${kind === "resume" ? "resume analysis" : "image"}?`)) return;
+    if (!window.confirm(`Delete this ${config.itemName || kind}?`)) return;
     setBusyId(item.id);
     try {
       await config.remove(item.id);
       setItems((current) => current.filter((entry) => entry.id !== item.id));
       if (selectedId === String(item.id)) navigate(config.route, { replace: true });
       notifyWorkspaceHistoryChanged(kind);
-      toast.success(kind === "resume" ? "Resume analysis deleted" : "Image deleted");
+      toast.success(config.deleted || (kind === "resume" ? "Resume analysis deleted" : "Image deleted"));
     } catch {
       toast.error("Delete failed. Please try again.");
     } finally {
@@ -123,7 +155,7 @@ export default function WorkspaceHistoryPanel({ kind }) {
           const active = selectedId === String(item.id);
           return (
             <button key={item.id} type="button" onClick={() => open(item)} className={`group mb-0.5 flex w-full items-center gap-2 rounded-lg border px-2 py-2 text-left transition ${active ? "border-fuchsia-400/20 bg-fuchsia-400/[0.10]" : "border-transparent hover:bg-white/[0.045]"}`}>
-              <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${kind === "resume" ? "bg-orange-400/10 text-orange-300" : "bg-fuchsia-400/10 text-fuchsia-300"}`}><Icon size={13} /></span>
+              <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${kind === "resume" ? "bg-orange-400/10 text-orange-300" : kind === "coverLetter" ? "bg-cyan-400/10 text-cyan-300" : "bg-fuchsia-400/10 text-fuchsia-300"}`}><Icon size={13} /></span>
               <span className="min-w-0 flex-1">
                 <strong className="block truncate text-[12px] font-medium text-white/70">{config.title(item)}</strong>
                 <small className="block truncate text-[10px] text-white/25">{config.meta(item)}</small>

@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "../../../../job tracker backend"
+		},
+		{
+			"path": "../../.."
+		}
+	],
+	"settings": {
+		"java.debug.settings.onBuildFailureProceed": true
+	}
+}

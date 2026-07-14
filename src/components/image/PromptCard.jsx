@@ -1,8 +1,9 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Loader2, Send, Sparkles, Wand2 } from "lucide-react";
 import toast from "react-hot-toast";
 import ImageUploader from "./ImageUploader";
 import { generateImage } from "../../services/imageService";
+import { VoiceInputButton } from "../voice/VoiceControls";
 
 const quickPrompts = [
   "A premium SaaS dashboard hero image, dark mode, glass UI, 3D depth",
@@ -54,13 +55,16 @@ export default function PromptCard({ onGenerated, onLoadingChange }) {
             <label className="text-xs font-bold uppercase tracking-wide text-slate-400">Prompt</label>
             <span className="text-[11px] font-semibold text-yellow-300">200 tokens</span>
           </div>
+          <div className="relative">
           <textarea
             rows={7}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder={image ? "Describe exactly how to edit this image..." : "Describe the image you want to generate..."}
-            className="w-full resize-none rounded-2xl border border-white/10 bg-[#070b16] p-4 text-sm leading-6 text-white outline-none placeholder:text-slate-600 focus:border-fuchsia-400/70"
+            className="w-full resize-none rounded-2xl border border-white/10 bg-[#070b16] p-4 pr-12 text-sm leading-6 text-white outline-none placeholder:text-slate-600 focus:border-fuchsia-400/70"
           />
+          <VoiceInputButton value={prompt} onChange={setPrompt} disabled={loading} className="absolute bottom-3 right-3 grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/[0.06] text-slate-300 hover:text-fuchsia-300" title="Speak image prompt" />
+          </div>
         </div>
 
         <div className="space-y-2">

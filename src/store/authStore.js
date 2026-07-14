@@ -195,11 +195,16 @@ const useAuthStore = create((set, get) => ({
         restoreSessionRetryAttempt = 0;
 
         const cachedUser = tokenStorage.getUser();
+        const restoredUser = cachedUser && data.role
+          ? normalizeUser({ ...cachedUser, role: data.role })
+          : cachedUser;
+
+        if (restoredUser) tokenStorage.setUser(restoredUser);
 
         set({
           accessToken: data.accessToken,
           accessTokenExpiresAt: decodeJwtExpiry(data.accessToken),
-          user: cachedUser,
+          user: restoredUser,
           isAuthenticated: true,
           sessionChecked: true,
           backendUnreachable: false,

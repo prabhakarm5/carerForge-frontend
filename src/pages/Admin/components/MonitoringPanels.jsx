@@ -26,8 +26,8 @@ export function OverviewPanel({ overview }) {
       </div>
     </section>
     <section className="admin-list-grid"><MetricList title="Top API endpoints" items={overview.topEndpoints} color="cyan" /><MetricList title="Top product pages" items={overview.topPages} color="violet" /><MetricList title="Traffic locations" items={overview.countries} color="amber" /></section>
-    <section className="admin-panel admin-table-panel"><header><div><h3>Slow endpoint analysis</h3><p>Ranked by p95 latency, which is more reliable than a small-sample average</p></div><Clock3 size={18} /></header>
-      <div className="admin-table-scroll"><table><thead><tr><th>Endpoint</th><th>Requests</th><th>Average</th><th>P95</th><th>Maximum</th><th>Errors</th></tr></thead><tbody>{(overview.slowEndpoints || []).map((item) => <tr key={item.path}><td className="admin-route-cell">{item.path}</td><td>{item.requests}</td><td>{item.averageLatencyMs} ms</td><td className={item.p95LatencyMs > 750 ? "admin-latency-hot" : ""}>{item.p95LatencyMs} ms</td><td>{item.maxLatencyMs} ms</td><td>{item.errors}</td></tr>)}</tbody></table>{!overview.slowEndpoints?.length && <EmptyState label="Not enough request data yet" />}</div>
+    <section className="admin-panel admin-table-panel"><header><div><h3>Slow endpoint analysis</h3><p>P95 stabilizes after about 20 requests; low-count rows are provisional</p></div><Clock3 size={18} /></header>
+      <div className="admin-table-scroll"><table><thead><tr><th>Endpoint</th><th>Requests</th><th>Average</th><th>P95</th><th>Maximum</th><th>Errors</th></tr></thead><tbody>{(overview.slowEndpoints || []).map((item) => <tr key={item.path}><td className="admin-route-cell">{item.path}</td><td>{item.requests}{item.requests < 20 && <small className="admin-sample-note">Low sample</small>}</td><td>{item.averageLatencyMs} ms</td><td className={item.p95LatencyMs > 750 ? "admin-latency-hot" : ""}>{item.p95LatencyMs} ms</td><td>{item.maxLatencyMs} ms</td><td>{item.errors}</td></tr>)}</tbody></table>{!overview.slowEndpoints?.length && <EmptyState label="Not enough request data yet" />}</div>
     </section>
   </div>;
 }

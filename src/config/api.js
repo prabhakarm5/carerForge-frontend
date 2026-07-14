@@ -78,6 +78,7 @@ export const API = {
     GET_PROFILE: "/api/admin/me",
     UPDATE_PROFILE: "/api/admin/me",
     MONITORING: "/api/admin/monitoring/overview",
+    SYSTEM_STATUS: "/api/admin/system/status",
     GET_ALL_USERS: "/api/admin/users",
 
     GET_USER_BY_ID: (id) => `/api/admin/users/${id}`,
@@ -179,5 +180,25 @@ export const API = {
     GENERATE: (id) => `/api/resumes/${id}/generate`,
     DOWNLOAD: (id) => `/api/resumes/${id}/download`,
     DELETE: (id) => `/api/resumes/${id}`,
+  },
+  // ================= COVER LETTER STUDIO =================
+  COVER_LETTERS: {
+    GET_ALL: "/api/cover-letters",
+    STYLES: "/api/cover-letters/styles",
+    GET_BY_ID: (id) => `/api/cover-letters/${id}`,
+    GENERATE: "/api/cover-letters",
+    UPDATE: (id) => `/api/cover-letters/${id}`,
+    REGENERATE: (id) => `/api/cover-letters/${id}/regenerate`,
+    DOWNLOAD: (id, format) => `/api/cover-letters/${id}/download?format=${format}`,
+    DELETE: (id) => `/api/cover-letters/${id}`,
+  },
+  // ================= INTERVIEW PRACTICE =================
+  INTERVIEWS: {
+    GET_ALL: "/api/interviews",
+    START: "/api/interviews",
+    LIVE_TOKEN: "/api/interviews/live-token",
+    GET_BY_ID: (id) => `/api/interviews/${id}`,
+    ANSWER: (id) => `/api/interviews/${id}/answers`,
+    DELETE: (id) => `/api/interviews/${id}`,
   },
 };

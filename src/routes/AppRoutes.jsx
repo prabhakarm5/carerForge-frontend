@@ -58,7 +58,10 @@ import PaymentPolicy from "../shared/Paymentpolicy";
 import NotFound from "../pages/NotFound";
 
 const ResumeAIPage = lazy(() => import("../pages/ResumeAI/ResumeAIPage"));
+const CoverLetterPage = lazy(() => import("../pages/CoverLetter/CoverLetterPage"));
+const InterviewPage = lazy(() => import("../pages/Interview/InterviewPage"));
 const JobsPage = lazy(() => import("../pages/Jobs/JobsPage"));
+const SupportPage = lazy(() => import("../pages/Support/SupportPage"));
 const AdminLoginPage = lazy(() => import("../pages/Admin/AdminLoginPage"));
 const AdminDashboardPage = lazy(() => import("../pages/Admin/AdminDashboardPage"));
 
@@ -94,9 +97,12 @@ const ROUTE_TITLES = {
     "/chat/*": "Chat",
     "/image-generator": "AI Image Generator",
     "/resume": "Resume AI",
+    "/cover-letter": "Cover Letter Studio",
+    "/interview": "Interview Practice",
     "/jobs": "Live Jobs",
     "/profile": "Your Profile",
     "/wallet": "Wallet",
+    "/support": "Support Center",
 
     "/payment/success": "Payment Successful",
     "/payment/failed": "Payment Failed",
@@ -245,6 +251,24 @@ export default function AppRoutes() {
                         }
                     />
 
+                    {/* Editable, downloadable cover letters grounded in a selected resume */}
+                    <Route
+                        path="/cover-letter"
+                        element={
+                            <Suspense fallback={<div className="grid min-h-[45vh] place-items-center text-sm text-slate-400">Loading Cover Letter Studio...</div>}>
+                                <CoverLetterPage />
+                            </Suspense>
+                        }
+                    />
+                    {/* Adaptive voice interview practice */}
+                    <Route
+                        path="/interview"
+                        element={
+                            <Suspense fallback={<div className="grid min-h-[45vh] place-items-center text-sm text-slate-400">Preparing interview room...</div>}>
+                                <InterviewPage />
+                            </Suspense>
+                        }
+                    />
                     {/* Live jobs from the configured provider */}
                     <Route
                         path="/jobs"
@@ -259,6 +283,8 @@ export default function AppRoutes() {
 
                     {/* Wallet */}
                     <Route path="/wallet" element={<WalletPage />} />
+                    {/* Support tickets */}
+                    <Route path="/support" element={<Suspense fallback={<div className="grid min-h-[45vh] place-items-center text-sm text-slate-400">Loading support...</div>}><SupportPage /></Suspense>} />
 
                     {/* Payment result pages */}
                     <Route path="/payment/success" element={<PaymentSuccessPage />} />

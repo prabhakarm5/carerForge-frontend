@@ -228,6 +228,7 @@ export function startCheckout({
                                 reason: "verification_failed",
 
                                 error: err,
+                                orderId: response.razorpay_order_id,
 
                             });
 
@@ -286,6 +287,7 @@ export function startCheckout({
                                 "Payment Failed",
 
                             error: response.error,
+                            orderId: response.error?.metadata?.order_id || order.orderId,
 
                         });
 

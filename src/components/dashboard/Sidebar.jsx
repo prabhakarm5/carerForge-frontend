@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, useMemo, useCallback, memo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  Plus, LayoutDashboard, MessageSquare, Image, FileText, Globe, File, BriefcaseBusiness,
+  Plus, LayoutDashboard, MessageSquare, Image, FileText, Mail, Globe, File, BriefcaseBusiness, Video,
   Wallet, Settings, LogOut, Sparkles, X, Search, MoreHorizontal,
   Pencil, Archive, Trash2, Check, RotateCcw, ChevronRight, ChevronUp,
-  PanelLeftClose, PanelLeftOpen, User, Zap, Crown, Star, AlertTriangle, ChevronLeft,
+  PanelLeftClose, PanelLeftOpen, User, Zap, Crown, Star, AlertTriangle, ChevronLeft, LifeBuoy,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -38,7 +38,10 @@ const navItems = [
   { icon: MessageSquare,   text: "Chat AI",     path: "/chat",            color: "#34d399", bg: "rgba(52,211,153,0.12)"  },
   { icon: Image,           text: "Image AI",    path: "/image-generator", color: "#f472b6", bg: "rgba(244,114,182,0.12)" },
   { icon: FileText,        text: "Resume AI",   path: "/resume",          color: "#fb923c", bg: "rgba(251,146,60,0.12)"  },
+  { icon: Mail,            text: "Cover Letter", path: "/cover-letter", color: "#22d3ee", bg: "rgba(34,211,238,0.12)" },
+  { icon: Video,           text: "Interview", path: "/interview", color: "#34d399", bg: "rgba(52,211,153,0.12)" },
   { icon: BriefcaseBusiness, text: "Live Jobs", path: "/jobs",            color: "#fbbf24", bg: "rgba(251,191,36,0.12)"  },
+  { icon: LifeBuoy, text: "Support", path: "/support", color: "#22d3ee", bg: "rgba(34,211,238,0.12)" },
   { icon: Globe,           text: "Website AI",  path: "/website",         color: "#38bdf8", bg: "rgba(56,189,248,0.12)"  },
   { icon: File,            text: "PDF AI",      path: "/pdf-ai",          color: "#a78bfa", bg: "rgba(167,139,250,0.12)" },
 ];
@@ -340,6 +343,7 @@ function AccountMenu({ open, anchorExpanded, anchorBtnRef, user, planInfo, onClo
         <MenuRow icon={Wallet} label="Wallet" onClick={() => { onClose(); navigate("/wallet"); }} />
         <MenuRow icon={User} label="Profile" onClick={() => { onClose(); navigate("/profile"); }} />
         <MenuRow icon={Settings} label="Settings" onClick={() => { onClose(); navigate("/settings"); }} />
+        <MenuRow icon={LifeBuoy} label="Support" onClick={() => { onClose(); navigate("/support"); }} />
       </div>
 
       <div style={{ padding: 6, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
@@ -460,11 +464,13 @@ const ChatRow = memo(function ChatRow({
 function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refreshWallet }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const workspaceKind = location.pathname.startsWith("/resume") ? "resume"
+  const workspaceKind = location.pathname.startsWith("/interview") ? "interview"
+    : location.pathname.startsWith("/cover-letter") ? "coverLetter"
+    : location.pathname.startsWith("/resume") ? "resume"
     : location.pathname.startsWith("/image-generator") ? "image"
     : location.pathname.startsWith("/chat") ? "chat"
     : null;
-  const newItemLabel = workspaceKind === "resume" ? "New analysis" : workspaceKind === "image" ? "New image" : "New chat";
+  const newItemLabel = workspaceKind === "interview" ? "New interview" : workspaceKind === "coverLetter" ? "New cover letter" : workspaceKind === "resume" ? "New analysis" : workspaceKind === "image" ? "New image" : "New chat";
   const user = useAuthStore((state) => state.user);
   const logoutCurrentDevice = useAuthStore((state) => state.logoutCurrentDevice);
   const logoutEverywhere = useAuthStore((state) => state.logoutEverywhere);
@@ -574,7 +580,9 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refres
   }
 
   function startNewWorkspaceItem() {
-    if (workspaceKind === "resume") navigate("/resume?new=1");
+    if (workspaceKind === "interview") navigate("/interview?new=1");
+    else if (workspaceKind === "coverLetter") navigate("/cover-letter?new=1");
+    else if (workspaceKind === "resume") navigate("/resume?new=1");
     else if (workspaceKind === "image") navigate("/image-generator?new=1");
     else navigate("/chat");
   }
@@ -827,7 +835,7 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refres
           </div>
         )}
 
-        {isExpanded && (workspaceKind === "resume" || workspaceKind === "image") && (
+        {isExpanded && (workspaceKind === "resume" || workspaceKind === "image" || workspaceKind === "coverLetter" || workspaceKind === "interview") && (
           <WorkspaceHistoryPanel kind={workspaceKind} />
         )}
 

@@ -6,7 +6,7 @@ import {
   Image as ImageIcon, FileText,
   Zap, Globe, BookOpen, AlertTriangle, X,
   Maximize2, Download, ChevronLeft, ChevronDown,
-  Eye, EyeOff, ThumbsUp, ThumbsDown,
+  Eye, EyeOff, ThumbsUp, ThumbsDown, Volume2,
 } from "lucide-react";
 import { getConversation, getConversationStatus, getModels } from "../../services/conversationService";
 import { handleApiError } from "../../utils/errorHandler";
@@ -18,6 +18,7 @@ import ArtifactPanel from "./components/ArtifactPanel";
 import { notifyConversationsChanged } from "../../components/dashboard/Sidebar";
 import { publishWorkspaceContext } from "../../services/workspaceEvents";
 import { getWallet } from "../../services/walletService";
+import { speakText } from "../../components/voice/VoiceControls";
 
 // ─── Config ──────────────────────────────────────────────────────────────
 const SUGGESTIONS = [
@@ -739,6 +740,7 @@ const MessageRow = memo(function MessageRow({ role, content, image, isStreaming 
         {!isStreaming && content && (
           <div className="message-actions" style={{ marginTop: 5, marginLeft: -6, display: "flex", alignItems: "center", gap: 1, opacity: 0.7 }}>
             <CopyBtn text={content} />
+            <ActionBtn icon={Volume2} label="Read aloud" onClick={() => speakText(content)} />
             <ActionBtn icon={ThumbsUp} doneIcon={ThumbsUp} label="Like" doneLabel="Liked" done={feedback === "up"} onClick={() => setFeedback(feedback === "up" ? null : "up")} />
             <ActionBtn icon={ThumbsDown} doneIcon={ThumbsDown} label="Dislike" doneLabel="Disliked" done={feedback === "down"} onClick={() => setFeedback(feedback === "down" ? null : "down")} />
             {onRetry && <ActionBtn icon={RotateCcw} label="Retry" onClick={() => onRetry(retryIndex)} />}

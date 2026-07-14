@@ -6,7 +6,11 @@ export async function getAdminOverview() {
   return response.data;
 }
 
-export async function getAdminUsers(page = 0, size = 20, query = "") {
+
+export async function getAdminSystemStatus() {
+  const response = await axiosInstance.get(API.ADMIN.SYSTEM_STATUS);
+  return response.data;
+}export async function getAdminUsers(page = 0, size = 20, query = "") {
   const response = await axiosInstance.get(API.ADMIN.GET_ALL_USERS, {
     params: { page, size, q: query.trim() },
   });
@@ -71,5 +75,26 @@ export async function saveAdminPromo(id, payload) {
 
 export async function deleteAdminPromo(id) {
   const response = await axiosInstance.delete(API.ADMIN.PROMO(id));
+  return response.data;
+}
+export async function getAdminSupportTickets(status = "") {
+  const response = await axiosInstance.get("/api/admin/support/tickets", {
+    params: status ? { status } : {},
+  });
+  return response.data;
+}
+
+export async function getAdminSupportTicket(id) {
+  const response = await axiosInstance.get("/api/admin/support/tickets/" + id);
+  return response.data;
+}
+
+export async function replyAdminSupportTicket(id, message) {
+  const response = await axiosInstance.post("/api/admin/support/tickets/" + id + "/messages", { message });
+  return response.data;
+}
+
+export async function updateAdminSupportStatus(id, status) {
+  const response = await axiosInstance.patch("/api/admin/support/tickets/" + id + "/status", { status });
   return response.data;
 }

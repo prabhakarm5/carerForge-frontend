@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, AppWindow, CreditCard, LayoutDashboard, LogOut, RefreshCw, Tag, Users } from "lucide-react";
+import { Activity, AppWindow, CreditCard, LayoutDashboard, LifeBuoy, LogOut, RefreshCw, ServerCog, Tag, Users } from "lucide-react";
 import toast from "react-hot-toast";
 import BrandLogo from "../../shared/BrandLogo";
 import useAuthStore from "../../store/authStore";
 import {
-  deleteAdminPlan, deleteAdminPromo, deleteAdminUser, getAdminOverview, getAdminPlans,
+  deleteAdminPlan, deleteAdminPromo, deleteAdminUser, getAdminOverview, getAdminPlans, getAdminSystemStatus,
   getAdminPromos, getAdminUserActivity, getAdminUsers, updateAdminUser,
 } from "../../services/adminService";
 import { LoadingState, requestError } from "./components/AdminUi";
@@ -13,6 +13,8 @@ import UsersPanel from "./components/UsersPanel";
 import UserDrawer from "./components/UserDrawer";
 import { PlansPanel, PromosPanel } from "./components/CommercePanels";
 import EditorModal from "./components/EditorModal";
+import SupportPanel from "./components/SupportPanel";
+import SystemPanel from "./components/SystemPanel";
 import "./admin.css";
 
 const TABS = [
@@ -21,6 +23,8 @@ const TABS = [
   { id: "users", label: "Users", icon: Users },
   { id: "plans", label: "Plans", icon: CreditCard },
   { id: "promos", label: "Promos", icon: Tag },
+  { id: "support", label: "Support", icon: LifeBuoy },
+  { id: "system", label: "System", icon: ServerCog },
 ];
 
 export default function AdminDashboardPage() {
@@ -35,6 +39,8 @@ export default function AdminDashboardPage() {
   const [plansLoading, setPlansLoading] = useState(false);
   const [promos, setPromos] = useState([]);
   const [promosLoading, setPromosLoading] = useState(false);
+  const [systemStatus, setSystemStatus] = useState(null);
+  const [systemLoading, setSystemLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
@@ -73,6 +79,13 @@ export default function AdminDashboardPage() {
     finally { setPromosLoading(false); }
   }, []);
 
+  const loadSystem = useCallback(async () => {
+    setSystemLoading(true);
+    try { setSystemStatus(await getAdminSystemStatus()); }
+    catch (request) { toast.error(requestError(request, "Could not check platform services")); }
+    finally { setSystemLoading(false); }
+  }, []);
+
   const loadActivity = useCallback(async (id) => {
     setDrawerLoading(true);
     try { setActivity(await getAdminUserActivity(id)); }
@@ -97,9 +110,10 @@ export default function AdminDashboardPage() {
       if (activeTab === "users") loadUsers();
       if (activeTab === "plans") loadPlans();
       if (activeTab === "promos") loadPromos();
+      if (activeTab === "system") loadSystem();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [activeTab, loadUsers, loadPlans, loadPromos]);
+  }, [activeTab, loadUsers, loadPlans, loadPromos, loadSystem]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -141,6 +155,7 @@ export default function AdminDashboardPage() {
     if (activeTab === "users") return loadUsers();
     if (activeTab === "plans") return loadPlans();
     if (activeTab === "promos") return loadPromos();
+    if (activeTab === "system") return loadSystem();
     return loadOverview();
   };
 
@@ -157,6 +172,8 @@ export default function AdminDashboardPage() {
           {activeTab === "users" && <UsersPanel pageData={usersPage} loading={usersLoading} query={queryInput} setQuery={setQueryInput} page={page} setPage={setPage} onSelect={(account) => setSelectedUserId(account.id)} onAction={actOnUser} actionId={actionId} />}
           {activeTab === "plans" && <PlansPanel plans={plans} loading={plansLoading} onEdit={(item) => setEditor({ type: "plan", item })} onDelete={removePlan} />}
           {activeTab === "promos" && <PromosPanel promos={promos} loading={promosLoading} onEdit={(item) => setEditor({ type: "promo", item })} onDelete={removePromo} />}
+          {activeTab === "support" && <SupportPanel />}
+          {activeTab === "system" && <SystemPanel status={systemStatus} loading={systemLoading} onRefresh={loadSystem} />}
         </>}
       </main>
     </div>

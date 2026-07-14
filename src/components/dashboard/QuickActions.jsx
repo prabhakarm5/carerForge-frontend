@@ -1,12 +1,12 @@
 /* QuickActions.jsx */
-import { MessageSquarePlus, Image, FileText, Globe } from "lucide-react";
+import { MessageSquarePlus, Image, FileText, Mail } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const actions = [
-  { title: "New Chat",    icon: MessageSquarePlus, path: "/chat",            color: "violet"   },
-  { title: "Image AI",    icon: Image,              path: "/image-generator", color: "pink"     },
-  { title: "PDF AI",      icon: FileText,          path: "/pdf-ai",          color: "cyan"     },
-  { title: "Website AI",  icon: Globe,             path: "/website",         color: "emerald"  },
+  { title: "New Chat",     icon: MessageSquarePlus, path: "/chat",            color: "violet" },
+  { title: "Resume AI",    icon: FileText,          path: "/resume",          color: "emerald" },
+  { title: "Cover Letter", icon: Mail,              path: "/cover-letter",    color: "cyan" },
+  { title: "Image AI",     icon: Image,             path: "/image-generator", color: "pink" },
 ];
 
 const colorMap = {

@@ -24,7 +24,7 @@ function DashboardLayout() {
 
   // Chat page full-page honi chahiye — extra padding/scroll nahi
   const isChatPage = location.pathname.startsWith("/chat");
-  const isFocusedWorkspace = isChatPage || location.pathname.startsWith("/resume");
+  const isFocusedWorkspace = isChatPage || location.pathname.startsWith("/resume") || location.pathname.startsWith("/cover-letter") || location.pathname.startsWith("/interview");
 
   return (
     <div className="overflow-hidden bg-[#050810]" style={{ height: "var(--app-height, 100dvh)" }}>
@@ -46,7 +46,7 @@ function DashboardLayout() {
 
       <div
         className="dashboard-content-area flex flex-col overflow-hidden transition-[margin] duration-200"
-        style={{ height: "var(--app-height, 100dvh)" }}
+        style={{ height: "var(--app-height, 100dvh)", "--sidebar-width": `${contentMarginLeft}px` }}
       >
         <Topbar
           setSidebarOpen={setSidebarOpen}

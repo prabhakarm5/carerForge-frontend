@@ -39,6 +39,7 @@ import {
 import { getWallet } from "../../services/walletService";
 import { notifyWorkspaceHistoryChanged, publishWorkspaceContext } from "../../services/workspaceEvents";
 import RechargeModal from "../../components/common/recharge/RechargeModal";
+import { SpeakButton, VoiceInputButton } from "../../components/voice/VoiceControls";
 import "./ResumeAIPage.css";
 
 const ACCEPTED_TYPES = ".pdf,.docx,.txt,.png,.jpg,.jpeg,.webp";
@@ -315,6 +316,7 @@ function CoachMessage({ message }) {
       {assistant ? <AssistantMark /> : <span className="resume-avatar user"><UserRound size={15} /></span>}
       <div className={assistant ? "resume-assistant-content resume-markdown" : "resume-user-message"}>
         {assistant ? <ReactMarkdown>{message.content || ""}</ReactMarkdown> : <p>{message.content}</p>}
+        {assistant && message.content && <SpeakButton text={message.content} className="resume-attach" title="Read answer aloud" />}
       </div>
     </div>
   );
@@ -759,6 +761,7 @@ export default function ResumeAIPage() {
               onChange={(event) => { setComposer(event.target.value); if (event.target.value.trim()) setLanguage(detectLanguage(event.target.value)); }}
               onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendCoachMessage(); } }}
             />
+            <VoiceInputButton value={composer} onChange={setComposer} disabled={busy} className="resume-attach" title="Speak your message" />
             <button className="resume-send" type="button" onClick={() => sendCoachMessage()} disabled={!composer.trim() || busy} aria-label="Send message">{busy ? <LoaderCircle className="resume-spin" size={17} /> : <Send size={17} />}</button>
           </div>
           <p>CareerForge can make mistakes. Verify dates, skills and experience before applying.</p>

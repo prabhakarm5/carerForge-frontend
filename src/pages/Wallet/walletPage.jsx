@@ -4,11 +4,11 @@ import {
   Wallet as WalletIcon, Plus, ArrowUpRight, ArrowDownRight,
   Loader2, RotateCcw, Zap, Gift, Image as ImageIcon, CreditCard,
   Star, Crown, Sparkles, ChevronRight, Calendar, X, ChevronDown,
-  ArrowLeft,
+  ArrowLeft, CircleCheck, CircleX, Clock3, LifeBuoy,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { getWallet, getWalletHistory } from "../../services/walletService";
-import { startCheckout, enablePaymentGuard, disablePaymentGuard } from "../../services/paymentService";
+import { startCheckout, enablePaymentGuard, disablePaymentGuard, getPaymentHistory } from "../../services/paymentService";
 import useAuthStore from "../../store/authStore";
 import RechargeModal from "../../components/common/recharge/RechargeModal";
 import PaymentProcessingOverlay from "../../pages/Payment/PaymentProcessingOverlay";
@@ -76,6 +76,8 @@ export default function WalletPage() {
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState(false);
+  const [payments, setPayments] = useState([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
 
   const [dateFilter, setDateFilter] = useState("");
   const [visibleCount, setVisibleCount] = useState(HISTORY_PAGE_SIZE);
@@ -113,13 +115,25 @@ export default function WalletPage() {
     }
   }, []);
 
+  const loadPayments = useCallback(async () => {
+    try {
+      setPaymentsLoading(true);
+      setPayments(await getPaymentHistory());
+    } catch {
+      setPayments([]);
+    } finally {
+      setPaymentsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       loadWallet();
       loadHistory();
+      loadPayments();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadWallet, loadHistory]);
+  }, [loadWallet, loadHistory, loadPayments]);
 
 
   // ================= CHECKOUT FLOW =================
@@ -136,7 +150,7 @@ export default function WalletPage() {
       });
 
       toast.success("Payment successful!");
-      await Promise.all([loadWallet(), loadHistory()]);
+      await Promise.all([loadWallet(), loadHistory(), loadPayments()]);
 
       navigate("/payment/success", {
         state: {
@@ -154,6 +168,7 @@ export default function WalletPage() {
           state: {
             verified: true,
             reason: err?.reason || "Payment could not be completed",
+            orderId: err?.orderId,
           },
         });
       }
@@ -185,7 +200,7 @@ export default function WalletPage() {
   }
 
   async function handlePlanActivated() {
-    await Promise.all([loadWallet(), loadHistory()]);
+    await Promise.all([loadWallet(), loadHistory(), loadPayments()]);
   }
 
   const remaining = wallet?.remainingTokens ?? 0;
@@ -502,6 +517,33 @@ export default function WalletPage() {
         </div>
       </div>
 
+      <section className="mt-7">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div><h2 className="text-sm font-bold text-white/70">Payment activity</h2><p className="mt-0.5 text-[11px] text-white/30">Gateway orders, including pending and failed attempts.</p></div>
+          <button onClick={loadPayments} title="Refresh payment activity" className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 text-white/40 hover:bg-white/5"><RotateCcw size={13} /></button>
+        </div>
+        {paymentsLoading ? <Skeleton h={64} r={10} /> : payments.length === 0 ? <p className="py-8 text-center text-xs text-white/25">No payment attempts yet</p> : (
+          <div className="space-y-2">
+            {payments.map((payment) => {
+              const success = payment.status === "SUCCESS";
+              const failed = payment.status === "FAILED";
+              const StatusIcon = success ? CircleCheck : failed ? CircleX : Clock3;
+              const color = success ? "#34d399" : failed ? "#fb7185" : "#fbbf24";
+              return (
+                <div key={payment.orderId} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-white/[.025] px-3 py-3">
+                  <StatusIcon size={17} color={color} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-bold" style={{ color }}>{payment.status}</span><span className="font-mono text-[10px] text-white/35">{payment.orderId}</span></div>
+                    <p className="mt-1 text-[11px] text-white/35">{formatDate(payment.updatedAt || payment.createdAt)}{payment.failureReason ? " · " + payment.failureReason : payment.gatewayStatus ? " · Gateway: " + payment.gatewayStatus : ""}</p>
+                  </div>
+                  <strong className="text-sm text-white/80">₹{Number(payment.amount || 0).toLocaleString("en-IN")}</strong>
+                  {failed && <button onClick={() => navigate("/support?new=1&orderId=" + encodeURIComponent(payment.orderId) + "&reason=" + encodeURIComponent(payment.failureReason || "Payment failed"))} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-2.5 text-[11px] font-semibold text-cyan-300"><LifeBuoy size={12} /> Get help</button>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
       {/* Recharge Modal */}
       <RechargeModal
         open={rechargeOpen}

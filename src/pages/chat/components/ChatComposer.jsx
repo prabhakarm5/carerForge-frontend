@@ -1,4 +1,5 @@
 import { FileText, Paperclip, Send, StopCircle, X } from "lucide-react";
+import { VoiceInputButton } from "../../../components/voice/VoiceControls";
 
 const LONG_PASTE_THRESHOLD = 1800;
 
@@ -102,6 +103,13 @@ export default function ChatComposer({
             >
               <Paperclip size={15} />
             </button>
+            <VoiceInputButton
+              value={input}
+              onChange={setInput}
+              disabled={isBusy}
+              className="chat-composer-icon"
+              title="Speak your message"
+            />
           </div>
 
           {isBusy ? (

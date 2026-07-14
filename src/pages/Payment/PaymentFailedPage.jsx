@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { XCircle, RotateCcw, ArrowLeft, LayoutDashboard, AlertTriangle } from "lucide-react";
+import { XCircle, RotateCcw, ArrowLeft, LayoutDashboard, AlertTriangle, LifeBuoy } from "lucide-react";
 
 export default function PaymentFailedPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { reason, verified } = location.state || {};
+  const { reason, verified, orderId } = location.state || {};
 
   // ==========================================================
   // GUARD: Same as success page — direct URL hit karne se
@@ -157,6 +157,16 @@ export default function PaymentFailedPage() {
             <RotateCcw size={16} /> Try Again
           </button>
           <button
+            onClick={() => navigate("/support?new=1&orderId=" + encodeURIComponent(orderId || "") + "&reason=" + encodeURIComponent(reason || "Payment failed after checkout"))}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              width: "100%", padding: "13px", borderRadius: 14,
+              background: "rgba(34,211,238,0.08)", border: "1px solid rgba(34,211,238,0.22)",
+              color: "#67e8f9", fontSize: 13.5, fontWeight: 650, cursor: "pointer",
+            }}
+          >
+            <LifeBuoy size={15} /> Raise a support ticket
+          </button>          <button
             onClick={() => navigate("/dashboard")}
             style={{
               display: "flex",

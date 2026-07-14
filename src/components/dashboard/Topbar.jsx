@@ -331,15 +331,20 @@ export default function Topbar({ setSidebarOpen, wallet }) {
   const location = useLocation();
 
   const pageName = location.pathname.startsWith("/chat") ? "Chat"
+    : location.pathname.startsWith("/interview") ? "Interview"
     : location.pathname.startsWith("/image-generator") ? "Image AI"
     : location.pathname.startsWith("/resume") ? "Resume AI"
+    : location.pathname.startsWith("/cover-letter") ? "Cover Letter"
     : location.pathname.startsWith("/wallet") ? "Wallet"
     : location.pathname.startsWith("/profile") ? "Profile"
     : location.pathname.startsWith("/settings") ? "Settings"
+    : location.pathname.startsWith("/support") ? "Support"
     : "Dashboard";
 
   const expectedContextKind = location.pathname.startsWith("/chat") ? "chat"
+    : location.pathname.startsWith("/interview") ? "interview"
     : location.pathname.startsWith("/resume") ? "resume"
+    : location.pathname.startsWith("/cover-letter") ? "coverLetter"
     : location.pathname.startsWith("/image-generator") ? "image"
     : null;
 
