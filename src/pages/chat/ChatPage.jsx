@@ -5,7 +5,7 @@ import {
   Code, Lightbulb, PenLine, ArrowDown,
   Image as ImageIcon, FileText,
   Zap, Globe, BookOpen, AlertTriangle, X,
-  Maximize2, Download, ChevronLeft, ChevronDown,
+  Maximize2, Download, ChevronDown,
   Eye, EyeOff, ThumbsUp, ThumbsDown, Volume2,
 } from "lucide-react";
 import { getConversation, getConversationStatus, getModels } from "../../services/conversationService";
@@ -15,6 +15,8 @@ import useChatStreamStore from "../../services/Chatstreamstore";
 import ChatComposer from "./components/ChatComposer";
 import RichInlineText from "./components/RichInlineText";
 import ArtifactPanel from "./components/ArtifactPanel";
+import ArtifactCard from "./components/ArtifactCard";
+import { normalizeMessageMarkup, parseContent } from "./components/artifactParser";
 import { notifyConversationsChanged } from "../../components/dashboard/Sidebar";
 import { publishWorkspaceContext } from "../../services/workspaceEvents";
 import { getWallet } from "../../services/walletService";
@@ -250,71 +252,6 @@ function useThrottledValue(value, delayMs) {
   return throttled;
 }
 
-// ─── Parse markdown into blocks ──────────────────────────────────────────
-function parseContent(raw) {
-  const blocks = [];
-  const lines  = raw.split("\n");
-  let i = 0;
-  while (i < lines.length) {
-    const trimmed = lines[i].trimStart();
-
-    const dataHref = lines[i].match(/<a\s+[^>]*href=["'](data:text\/html[^"']+)["'][^>]*>(.*?)<\/a>/i);
-    if (dataHref) {
-      try {
-        const comma = dataHref[1].indexOf(",");
-        const encoded = comma >= 0 ? dataHref[1].slice(comma + 1) : "";
-        blocks.push({
-          type: "artifact",
-          lang: "html",
-          content: decodeURIComponent(encoded),
-          label: dataHref[2]?.replace(/<[^>]+>/g, "").trim() || "",
-        });
-      } catch {
-        blocks.push({ type: "text", content: lines[i] });
-      }
-      i++;
-      continue;
-    }
-
-    if (trimmed.startsWith("```")) {
-      const lang = lines[i].trim().slice(3).trim() || "code";
-      const code = [];
-      i++;
-      while (i < lines.length && !lines[i].trimStart().startsWith("```")) {
-        code.push(lines[i]);
-        i++;
-      }
-      i++;
-      blocks.push({ type: "code", lang, content: code.join("\n") });
-      continue;
-    }
-
-    if (trimmed.includes("|") && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) && lines[i + 1].includes("-")) {
-      const headerCells = trimmed.replace(/^\||\|$/g, "").split("|").map(c => c.trim());
-      i += 2;
-      const rows = [];
-      while (i < lines.length && lines[i].trimStart().includes("|") && lines[i].trim() !== "") {
-        const rowCells = lines[i].trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
-        rows.push(rowCells);
-        i++;
-      }
-      blocks.push({ type: "table", header: headerCells, rows });
-      continue;
-    }
-
-    const line = lines[i];
-    if (line.startsWith("> ")) blocks.push({ type: "quote", content: line.slice(2) });
-    else if (line.startsWith("### ")) blocks.push({ type: "h3", content: line.slice(4) });
-    else if (line.startsWith("## ")) blocks.push({ type: "h2", content: line.slice(3) });
-    else if (line.startsWith("# "))  blocks.push({ type: "h1", content: line.slice(2) });
-    else if (line.startsWith("- ") || line.startsWith("* ")) blocks.push({ type: "li", content: line.slice(2) });
-    else if (/^\d+\. /.test(line)) blocks.push({ type: "oli", content: line.replace(/^\d+\. /, "") });
-    else blocks.push({ type: "text", content: line });
-    i++;
-  }
-  return blocks;
-}
-
 // ─── Inline text (bold / inline-code) ────────────────────────────────────
 function InlineText({ text }) {
   return <RichInlineText text={text} />;
@@ -332,9 +269,9 @@ function downloadAsFile(content, filename) {
   URL.revokeObjectURL(url);
 }
 
-function downloadSnippet(content, lang) {
+function downloadSnippet(content, lang, title = "snippet") {
   const ext = EXT_MAP[(LANG_ALIAS[lang.toLowerCase()] || lang.toLowerCase())] || "txt";
-  downloadAsFile(content, `snippet.${ext}`);
+  downloadAsFile(content, `${slugify(title)}.${ext}`);
 }
 
 function slugify(text) {
@@ -458,40 +395,6 @@ function CodeBlock({ lang, content, onOpenPanel, isStreaming = false }) {
   );
 }
 
-function ArtifactCard({ artifact, onOpenPanel }) {
-  return (
-    <div style={{
-      margin: "10px 0", borderRadius: 14, overflow: "hidden",
-      border: "1px solid rgba(139,92,246,0.22)",
-      background: "linear-gradient(135deg,rgba(124,58,237,0.12),rgba(15,23,42,0.92))",
-      boxShadow: "0 12px 38px rgba(0,0,0,0.35)",
-    }}>
-      <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#c4b5fd", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            <Code size={14} /> HTML artifact
-          </div>
-          <p style={{ margin: "7px 0 0", color: "#e2e8f0", fontSize: 14, fontWeight: 700 }}>{artifact.label || "Generated preview"}</p>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <button
-            onClick={() => onOpenPanel?.({ lang: artifact.lang, content: artifact.content })}
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 10, border: "1px solid rgba(139,92,246,0.35)", background: "rgba(139,92,246,0.18)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-          >
-            <Maximize2 size={13} /> Open
-          </button>
-          <button
-            onClick={() => downloadSnippet(artifact.content, artifact.lang)}
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", color: "#cbd5e1", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-          >
-            <Download size={13} /> Download
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Table block ─────────────────────────────────────────────────────────
 function TableBlock({ header, rows }) {
   return (
@@ -526,7 +429,8 @@ function TableBlock({ header, rows }) {
 function RenderedMessage({ content, onOpenPanel, isStreaming = false }) {
   // Re-parse at most ~8x/sec while streaming; flush the exact final text
   // the instant streaming ends (delayMs becomes 0 → immediate).
-  const throttledContent = useThrottledValue(content, isStreaming ? 120 : 0);
+  const normalizedContent = useMemo(() => normalizeMessageMarkup(content), [content]);
+  const throttledContent = useThrottledValue(normalizedContent, isStreaming ? 140 : 0);
   const blocks = useMemo(() => parseContent(throttledContent), [throttledContent]);
   let listBuffer = [];
   let listType = null;
@@ -570,7 +474,15 @@ function RenderedMessage({ content, onOpenPanel, isStreaming = false }) {
     }
 
     if (b.type === "artifact") {
-      rendered.push(<ArtifactCard key={i} artifact={b} onOpenPanel={onOpenPanel} />);
+      rendered.push(
+        <ArtifactCard
+          key={i}
+          artifact={b}
+          onOpenPanel={onOpenPanel}
+          onDownload={downloadSnippet}
+          isStreaming={isStreaming}
+        />
+      );
     } else if (b.type === "code") {
       rendered.push(<CodeBlock key={i} lang={b.lang} content={b.content} onOpenPanel={onOpenPanel} isStreaming={isStreaming} />);
     } else if (b.type === "table") {
@@ -662,7 +574,11 @@ const MessageRow = memo(function MessageRow({ role, content, image, isStreaming 
     () => (content || "").replace(/~~~[\s\S]*?~~~/g, "").length,
     [content]
   );
-  const isLongDoc = !isUser && !isStreaming && plainLength > LONG_DOC_THRESHOLD;
+  const hasArtifact = useMemo(() => {
+    if (isUser || isStreaming) return false;
+    return parseContent(normalizeMessageMarkup(content)).some((block) => block.type === "artifact");
+  }, [content, isStreaming, isUser]);
+  const isLongDoc = !isUser && !isStreaming && !hasArtifact && plainLength > LONG_DOC_THRESHOLD;
 
   if (isUser) {
     return (
@@ -950,12 +866,6 @@ function hueFromString(str = "") {
   return Math.abs(hash) % 360;
 }
 
-function shortLabel(label = "", max = 16) {
-  const words = label.trim().split(/\s+/);
-  const short = words.slice(0, 2).join(" ");
-  return short.length > max ? short.slice(0, max - 1) + "…" : short;
-}
-
 function ModelAvatar({ label, size = 26 }) {
   const hue = hueFromString(label);
   return (
@@ -1010,7 +920,7 @@ function ModelRow({ m, active, onSelect }) {
   );
 }
 
-function ModelSelector({ models, selectedId, onSelect, disabled, compact }) {
+function ModelSelector({ models, selectedId, onSelect, disabled }) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const ref = useRef(null);
@@ -1378,7 +1288,7 @@ export default function ChatPage() {
       }
     }
 
-    const timer = setInterval(checkConversation, 5000);
+    const timer = setInterval(checkConversation, 30000);
     return () => { cancelled = true; clearInterval(timer); };
   }, [id, isBusy, navigate]);
   useEffect(() => {

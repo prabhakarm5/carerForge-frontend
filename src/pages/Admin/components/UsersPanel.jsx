@@ -2,7 +2,7 @@ import { Ban, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Search, Shield, 
 import { memo, useEffect, useState } from "react";
 import { EmptyState, formatNumber, LoadingState, SectionHeader } from "./AdminUi";
 
-const SEARCH_DEBOUNCE_MS = 300;
+const SEARCH_DEBOUNCE_MS = 550;
 
 function UserRow({ account, onSelect, onAction, isRowBusy, busyAction }) {
   const handleKeyDown = (event) => {

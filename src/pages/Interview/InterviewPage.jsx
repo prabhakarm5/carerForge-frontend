@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Camera, CameraOff, CheckCircle2, ChevronRight, Loader2, Mic2, RotateCcw, Send, Sparkles, Target, Video } from "lucide-react";
+import { Camera, CameraOff, CheckCircle2, ChevronRight, Loader2, RotateCcw, Send } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { answerInterview, getInterview, startInterview } from "../../services/interviewService";
@@ -9,13 +9,8 @@ import { notifyWorkspaceHistoryChanged, publishWorkspaceContext } from "../../se
 import { SpeakButton, VoiceInputButton, speakText, stopSpeaking } from "../../components/voice/VoiceControls";
 import RechargeModal from "../../components/common/recharge/RechargeModal";
 import LiveInterviewRoom from "./LiveInterviewRoom";
+import InterviewSetup from "./InterviewSetup";
 import "./InterviewPage.css";
-
-const TYPES = [
-  ["MIXED", "Mixed"], ["TECHNICAL", "Technical"], ["BEHAVIORAL", "Behavioral"],
-  ["HR", "HR"], ["SYSTEM_DESIGN", "System design"],
-];
-const DIFFICULTIES = [["BEGINNER", "Beginner"], ["INTERMEDIATE", "Intermediate"], ["ADVANCED", "Advanced"]];
 
 function apiMessage(error, fallback) {
   return error?.response?.data?.message || error?.message || fallback;
@@ -147,34 +142,7 @@ export default function InterviewPage() {
 
   return (
     <div className="interview-page">
-      {liveRoom ? (<LiveInterviewRoom config={liveRoom} onExit={() => { setLiveRoom(null); publishWorkspaceContext({ kind: "interview", title: "New practice" }); }} />) : !session ? (
-        <form className="interview-setup" onSubmit={enterLive}>
-          <section className="interview-intro">
-            <span className="interview-kicker"><Sparkles size={14} /> AI mock interview</span>
-            <h1>Practice the interview, not a script.</h1>
-            <p>Questions adapt to your role, job description and every answer. Speak naturally and receive a score after each response.</p>
-            <div className="interview-feature-row"><span><Mic2 size={16} /> Voice answers</span><span><Video size={16} /> Camera rehearsal</span><span><Target size={16} /> Adaptive scoring</span></div>
-          </section>
-          <section className="interview-form-panel">
-            <div className="interview-grid">
-              <label>Target role<input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} placeholder="Java Backend Developer" maxLength={140} /></label>
-              <label>Company (optional)<input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Company name" maxLength={140} /></label>
-              <label>Interview type<select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>{TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-              <label>Difficulty<select value={form.difficulty} onChange={(e) => setForm({ ...form, difficulty: e.target.value })}>{DIFFICULTIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-              <label>Speaking language<select value={form.language} onChange={(e) => setForm({ ...form, language: e.target.value })}><option value="AUTO">Automatic Hindi / English</option><option value="HINDI">Hindi / Hinglish</option><option value="ENGLISH">English only</option></select></label>
-              <label>Interviewer style<select value={form.interviewerStyle} onChange={(e) => setForm({ ...form, interviewerStyle: e.target.value })}><option value="BALANCED">Balanced</option><option value="SUPPORTIVE">Supportive</option><option value="STRICT">Strict</option></select></label>
-              <label>Resume context<select value={form.resumeProjectId} onChange={(e) => setForm({ ...form, resumeProjectId: e.target.value })}><option value="">No resume</option>{resumes.map((item) => <option key={item.id} value={item.id}>{item.fileName || "Resume"}</option>)}</select></label>
-              <label>Questions<select value={form.questionCount} onChange={(e) => setForm({ ...form, questionCount: e.target.value })}>{[3, 4, 5, 6, 7, 8, 9, 10].map((count) => <option key={count}>{count}</option>)}</select></label>
-              <label className="interview-wide">Gemini model<select value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })}>{models.map((item) => <option key={item.id} value={item.id}>{item.label || item.id}</option>)}</select></label>
-              <label className="interview-wide">Job description<textarea value={form.jobDescription} onChange={(e) => setForm({ ...form, jobDescription: e.target.value })} placeholder="Paste the complete job description here..." rows={7} maxLength={20000} /></label>
-            </div>
-            <div className="interview-entry-actions">
-              <button className="interview-primary" type="submit"><Video size={17} /> Enter live voice room</button>
-              <button className="interview-written" type="button" onClick={beginWritten} disabled={submitting}>{submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Written practice</button>
-            </div>
-          </section>
-        </form>
-      ) : (
+      {liveRoom ? (<LiveInterviewRoom config={liveRoom} onRecharge={() => setRechargeOpen(true)} onExit={() => { setLiveRoom(null); publishWorkspaceContext({ kind: "interview", title: "New practice" }); }} />) : !session ? (<InterviewSetup form={form} setForm={setForm} resumes={resumes} models={models} submitting={submitting} onSubmit={enterLive} onWritten={beginWritten} />) : (
         <div className="interview-room">
           <header className="interview-room-head">
             <div><span>{session.type?.replaceAll("_", " ")} / {session.difficulty}</span><h1>{session.role}{session.company ? ` at ${session.company}` : ""}</h1></div>

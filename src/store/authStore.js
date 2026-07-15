@@ -36,7 +36,6 @@ function decodeJwtExpiry(token) {
   try {
     const payloadBase64 = token.split(".")[1];
 
-    // ✅ JWT base64url hota hai. Browser atob normal base64 expect karta hai.
     const normalizedBase64 = payloadBase64
       .replace(/-/g, "+")
       .replace(/_/g, "/")
@@ -61,33 +60,53 @@ function isServerUnreachable(error) {
 }
 
 // ✅ restoreSession duplicate call guard.
-// React StrictMode ya multiple components ke wajah se duplicate refresh-token call avoid hogi.
 let restoreSessionPromise = null;
 
-// ✅ Backend down retry timer.
-let restoreSessionRetryTimerId = null;
-let restoreSessionRetryAttempt = 0;
+// ✅ FIX — Auto-retry with backoff jab backend unreachable ho.
+// Pehle: ek attempt fail hote hi "backendUnreachable: true" set karke
+// ruk jaata tha, koi khud-ba-khud retry nahi hota tha jab tak koi naya
+// foreground API call na ho. Ab: pehla attempt turant (jaisa pehle tha),
+// fail hone par khud retry hoga — lekin API spam se bachne ke liye
+// gradually badhte gap (1s → 2s → 4s → 8s → 15s → 30s → 60s) ke saath.
+// Module-level rakha hai (store state nahi) taaki har tick par
+// unnecessary re-render na ho.
+let reconnectTimer = null;
+let reconnectAttempts = 0;
 
-const RESTORE_SESSION_BASE_RETRY_DELAY_MS = 5 * 1000;
-const RESTORE_SESSION_MAX_RETRY_DELAY_MS = 30 * 1000;
+const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 15000, 30000, 60000];
 
-function getRestoreSessionRetryDelay() {
-  const delay =
-    RESTORE_SESSION_BASE_RETRY_DELAY_MS *
-    Math.pow(2, restoreSessionRetryAttempt);
-
-  return Math.min(delay, RESTORE_SESSION_MAX_RETRY_DELAY_MS);
+function getNextReconnectDelay() {
+  const index = Math.min(reconnectAttempts, RECONNECT_DELAYS_MS.length - 1);
+  return RECONNECT_DELAYS_MS[index];
 }
 
-function clearRestoreSessionRetryTimer() {
-  if (restoreSessionRetryTimerId) {
-    clearTimeout(restoreSessionRetryTimerId);
-    restoreSessionRetryTimerId = null;
+function clearReconnectTimer() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
   }
+  reconnectAttempts = 0;
 }
 
-// ✅ Fetch use kiya hai taaki authStore -> axiosInstance circular import na bane.
-// axiosInstance already authStore ko import karta hai.
+function scheduleReconnect(retry) {
+  // Ek time par sirf ek hi retry pending rahe — duplicate timers na banein.
+  if (reconnectTimer) return;
+
+  const delay = getNextReconnectDelay();
+
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+
+    // Tab background me hai — abhi retry mat karo, API waste mat karo.
+    // Jab tab wapas visible hogi, App.jsx ka visibilitychange listener
+    // khud restoreSession() call karega (turant, delay ke bina).
+    if (document.visibilityState !== "visible") return;
+
+    reconnectAttempts += 1;
+    retry();
+  }, delay);
+}
+
 async function requestRefreshToken() {
   const csrfToken = getCsrfTokenFromCookie();
   const controller = new AbortController();
@@ -121,20 +140,15 @@ async function requestRefreshToken() {
 }
 
 const useAuthStore = create((set, get) => ({
-  // ✅ Access token localStorage me nahi rakhenge.
-  // Page refresh par ye null ho jayega, fir restoreSession naya token lega.
   accessToken: null,
   accessTokenExpiresAt: null,
 
-  // ✅ Sirf non-sensitive user info localStorage se aa sakti hai.
   user: tokenStorage.getUser(),
 
   isAuthenticated: false,
 
-  // ✅ Jab tak session check complete nahi hota, routes redirect nahi karenge.
   sessionChecked: false,
 
-  // ✅ Backend down state for banner/retry.
   backendUnreachable: false,
 
   login: (loginResponse) => {
@@ -168,7 +182,6 @@ const useAuthStore = create((set, get) => ({
   },
 
   restoreSession: async () => {
-    // ✅ Agar restore already chal raha hai to duplicate refresh-token hit mat karo.
     if (restoreSessionPromise) {
       return restoreSessionPromise;
     }
@@ -176,6 +189,7 @@ const useAuthStore = create((set, get) => ({
     restoreSessionPromise = (async () => {
       const cachedBeforeRefresh = tokenStorage.getUser();
       if (!cachedBeforeRefresh) {
+        clearReconnectTimer();
         set({
           accessToken: null,
           accessTokenExpiresAt: null,
@@ -187,12 +201,8 @@ const useAuthStore = create((set, get) => ({
         return null;
       }
 
-      clearRestoreSessionRetryTimer();
-
       try {
         const data = await requestRefreshToken();
-
-        restoreSessionRetryAttempt = 0;
 
         const cachedUser = tokenStorage.getUser();
         const restoredUser = cachedUser && data.role
@@ -200,6 +210,9 @@ const useAuthStore = create((set, get) => ({
           : cachedUser;
 
         if (restoredUser) tokenStorage.setUser(restoredUser);
+
+        // ✅ Success — koi pending retry ho to cancel karo.
+        clearReconnectTimer();
 
         set({
           accessToken: data.accessToken,
@@ -213,18 +226,7 @@ const useAuthStore = create((set, get) => ({
         return data.accessToken;
       } catch (error) {
         if (isServerUnreachable(error)) {
-          // ✅ Server down/network/CORS issue.
-          // Refresh token invalid hai iska proof nahi hai.
-          // Cached user hai to same page par rehne do.
           const cachedUser = tokenStorage.getUser();
-
-          const delay = getRestoreSessionRetryDelay();
-          restoreSessionRetryAttempt += 1;
-
-          restoreSessionRetryTimerId = setTimeout(() => {
-            restoreSessionRetryTimerId = null;
-            get().restoreSession();
-          }, delay);
 
           set({
             user: cachedUser,
@@ -233,15 +235,18 @@ const useAuthStore = create((set, get) => ({
             backendUnreachable: true,
           });
 
+          // ✅ Turant band mat karo — backoff ke saath khud retry karo.
+          scheduleReconnect(() => get().restoreSession());
+
           return null;
         }
 
         const status = error.response?.status;
 
-        // ✅ Server ne 401/403 diya.
-        // Matlab refreshToken cookie invalid/expired/missing hai.
-        if (status === 401 || status === 403) {
-          restoreSessionRetryAttempt = 0;
+        if (status === 401) {
+          // ✅ Session definitively invalid hai — retry karne ka koi matlab nahi.
+          clearReconnectTimer();
+
           sessionStorage.setItem("cf_auth_notice", "Your session has ended. Please sign in again.");
           tokenStorage.clear();
 
@@ -257,7 +262,7 @@ const useAuthStore = create((set, get) => ({
           return null;
         }
 
-        // ✅ 500 etc. me logout mat karo. Server issue ho sakta hai.
+        // ✅ 500 etc. — server issue ho sakta hai, retry karte raho.
         const cachedUser = tokenStorage.getUser();
 
         set({
@@ -266,6 +271,8 @@ const useAuthStore = create((set, get) => ({
           sessionChecked: true,
           backendUnreachable: true,
         });
+
+        scheduleReconnect(() => get().restoreSession());
 
         return null;
       }
@@ -295,9 +302,12 @@ const useAuthStore = create((set, get) => ({
       isAuthenticated: !!cachedUser || get().isAuthenticated,
       sessionChecked: true,
     });
+
+    scheduleReconnect(() => get().restoreSession());
   },
 
   markBackendReachable: () => {
+    clearReconnectTimer();
     set({
       backendUnreachable: false,
       sessionChecked: true,
@@ -305,8 +315,8 @@ const useAuthStore = create((set, get) => ({
   },
 
   logoutLocalOnly: () => {
-    clearRestoreSessionRetryTimer();
-    restoreSessionRetryAttempt = 0;
+    // ✅ Logout ke baad koi pending reconnect retry na chale.
+    clearReconnectTimer();
 
     tokenStorage.clear();
 

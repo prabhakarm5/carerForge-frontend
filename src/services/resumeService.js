@@ -1,6 +1,6 @@
-import axiosInstance from "../utils/axiosInstance";
+import axiosInstance, { refreshAccessTokenOnDemand } from "../utils/axiosInstance";
 import { API, API_BASE_URL } from "../config/api";
-import { refreshToken } from "./authService";
+
 import useAuthStore from "../store/authStore";
 
 const LONG_REQUEST_TIMEOUT_MS = 90_000;
@@ -81,9 +81,7 @@ export async function streamResumeCoach(projectId, message, model, { onChunk, si
   let token = useAuthStore.getState().accessToken;
   let response = await openResumeStream(projectId, message, model, signal, token);
   if (response.status === 401) {
-    const refreshed = await refreshToken();
-    token = refreshed.accessToken;
-    useAuthStore.getState().setAccessToken(token);
+    token = await refreshAccessTokenOnDemand();
     response = await openResumeStream(projectId, message, model, signal, token);
   }
   if (!response.ok || !response.body) {

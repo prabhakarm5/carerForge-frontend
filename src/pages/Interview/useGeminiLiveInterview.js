@@ -33,6 +33,10 @@ function downsampleToPcm16(input, inputRate, outputRate = 16000) {
   return new Uint8Array(output.buffer);
 }
 
+function canvasBlob(canvas) {
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.48));
+}
+
 export default function useGeminiLiveInterview(config) {
   const sessionRef = useRef(null);
   const streamRef = useRef(null);
@@ -41,27 +45,85 @@ export default function useGeminiLiveInterview(config) {
   const outputGainRef = useRef(null);
   const processorRef = useRef(null);
   const videoTimerRef = useRef(null);
+  const frameSendingRef = useRef(false);
   const sourcesRef = useRef(new Set());
   const nextAudioTimeRef = useRef(0);
   const intentionalCloseRef = useRef(false);
   const responseTimerRef = useRef(null);
+  const voiceHintTimerRef = useRef(null);
   const speechHeardRef = useRef(false);
+  const pendingTranscriptRef = useRef([]);
+  const transcriptSourceRef = useRef({ candidate: "", interviewer: "" });
+  const transcriptTimerRef = useRef(null);
+  const levelUpdatedAtRef = useRef(0);
+  const outputLevelUpdatedAtRef = useRef(0);
+  const connectedAtRef = useRef(0);
+
   const [status, setStatus] = useState("idle");
   const [micEnabled, setMicEnabledState] = useState(true);
   const [cameraEnabled, setCameraEnabledState] = useState(true);
+  const [speakerEnabled, setSpeakerEnabledState] = useState(true);
+  const [inputLevel, setInputLevel] = useState(0);
+  const [outputLevel, setOutputLevel] = useState(0);
+  const [connectionMs, setConnectionMs] = useState(null);
   const [transcript, setTranscript] = useState([]);
+  const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
   const stopOutput = useCallback(() => {
-    sourcesRef.current.forEach((source) => { try { source.stop(); } catch { /* already stopped */ } });
+    sourcesRef.current.forEach((source) => { try { source.stop(); } catch { /* source already ended */ } });
     sourcesRef.current.clear();
     nextAudioTimeRef.current = 0;
+    setOutputLevel(0);
+  }, []);
+
+  const flushTranscript = useCallback(() => {
+    window.clearTimeout(transcriptTimerRef.current);
+    transcriptTimerRef.current = null;
+    const queued = pendingTranscriptRef.current.splice(0);
+    if (!queued.length) return;
+    setTranscript((current) => {
+      const next = [...current];
+      queued.forEach(({ role, text }) => {
+        const last = next[next.length - 1];
+        if (last?.role === role && !last.final) last.text += text;
+        else next.push({ id: `${Date.now()}-${next.length}`, role, text, final: false });
+      });
+      return next.slice(-60);
+    });
+  }, []);
+
+  const addTranscript = useCallback((role, incomingText) => {
+    if (!incomingText?.trim()) return;
+
+    const previous = transcriptSourceRef.current[role] || "";
+    let delta = incomingText;
+
+    // Gemini may resend the complete partial transcription on every event.
+    // Only append the new suffix; repeated events must not duplicate captions.
+    if (incomingText === previous || previous.endsWith(incomingText)) return;
+    if (incomingText.startsWith(previous)) delta = incomingText.slice(previous.length);
+    transcriptSourceRef.current[role] = incomingText.startsWith(previous)
+      ? incomingText
+      : previous + incomingText;
+
+    if (!delta) return;
+    pendingTranscriptRef.current.push({ role, text: delta });
+    if (!transcriptTimerRef.current) {
+      transcriptTimerRef.current = window.setTimeout(flushTranscript, 120);
+    }
+  }, [flushTranscript]);
+
+  const clearVoiceTimers = useCallback(() => {
+    window.clearTimeout(responseTimerRef.current);
+    window.clearTimeout(voiceHintTimerRef.current);
   }, []);
 
   const close = useCallback((reason = "ended") => {
     intentionalCloseRef.current = true;
     window.clearInterval(videoTimerRef.current);
-    window.clearTimeout(responseTimerRef.current);
+    clearVoiceTimers();
+    window.clearTimeout(transcriptTimerRef.current);
     processorRef.current?.disconnect();
     processorRef.current = null;
     sessionRef.current?.sendRealtimeInput?.({ audioStreamEnd: true });
@@ -75,8 +137,10 @@ export default function useGeminiLiveInterview(config) {
     outputContextRef.current = null;
     outputGainRef.current = null;
     stopOutput();
+    setInputLevel(0);
+    setOutputLevel(0);
     setStatus(reason);
-  }, [stopOutput]);
+  }, [clearVoiceTimers, stopOutput]);
 
   const playPcm = useCallback(async (base64) => {
     const context = outputContextRef.current;
@@ -84,61 +148,76 @@ export default function useGeminiLiveInterview(config) {
     if (context.state === "suspended") await context.resume();
     const bytes = base64ToBytes(base64);
     const samples = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 2));
+    let outputEnergy = 0;
+    for (let index = 0; index < samples.length; index += 8) {
+      const normalized = samples[index] / 32768;
+      outputEnergy += normalized * normalized;
+    }
+    const outputRms = Math.sqrt(outputEnergy / Math.max(1, Math.ceil(samples.length / 8)));
+    const levelNow = performance.now();
+    if (levelNow - outputLevelUpdatedAtRef.current > 60) {
+      setOutputLevel(Math.min(1, outputRms * 5));
+      outputLevelUpdatedAtRef.current = levelNow;
+    }
     const buffer = context.createBuffer(1, samples.length, 24000);
     const channel = buffer.getChannelData(0);
     for (let index = 0; index < samples.length; index += 1) channel[index] = samples[index] / 32768;
     const source = context.createBufferSource();
     source.buffer = buffer;
     source.connect(outputGainRef.current || context.destination);
-    const startAt = Math.max(context.currentTime + 0.025, nextAudioTimeRef.current || 0);
+    const startAt = Math.max(context.currentTime + 0.018, nextAudioTimeRef.current || 0);
     source.start(startAt);
     nextAudioTimeRef.current = startAt + buffer.duration;
     sourcesRef.current.add(source);
-    source.onended = () => sourcesRef.current.delete(source);
+    source.onended = () => {
+      sourcesRef.current.delete(source);
+      if (!sourcesRef.current.size) setOutputLevel(0);
+    };
     setStatus("interviewer-speaking");
   }, []);
 
-  const addTranscript = useCallback((role, text) => {
-    if (!text?.trim()) return;
-    setTranscript((current) => {
-      const last = current[current.length - 1];
-      if (last?.role === role && !last.final) {
-        return [...current.slice(0, -1), { ...last, text: `${last.text}${text}` }];
-      }
-      return [...current, { id: `${Date.now()}-${current.length}`, role, text, final: false }].slice(-24);
-    });
-  }, []);
-
   const scheduleNoAnswerPrompt = useCallback(() => {
-    window.clearTimeout(responseTimerRef.current);
+    clearVoiceTimers();
     speechHeardRef.current = false;
+    voiceHintTimerRef.current = window.setTimeout(() => {
+      if (!speechHeardRef.current && sessionRef.current) {
+        setNotice("No clear voice detected. Check your mic or move closer.");
+      }
+    }, 4000);
     responseTimerRef.current = window.setTimeout(() => {
       if (!sessionRef.current || speechHeardRef.current) return;
       sessionRef.current.sendClientContent({
-        turns: "[SESSION EVENT] The candidate has not given a clear audible answer yet. Ask whether they need more time, then repeat the current question briefly.",
+        turns: "[SESSION EVENT] No clear audible answer has arrived. Briefly check the candidate's microphone, ask whether they need more time, and repeat the current question.",
         turnComplete: true,
       });
-    }, 14000);
-  }, []);
+    }, 8000);
+  }, [clearVoiceTimers]);
 
   const start = useCallback(async (mediaStream, videoElement) => {
     if (sessionRef.current || status === "connecting") return;
     intentionalCloseRef.current = false;
+    connectedAtRef.current = performance.now();
+    setConnectionMs(null);
     setError("");
+    setNotice("Preparing secure live audio...");
     setTranscript([]);
+    transcriptSourceRef.current = { candidate: "", interviewer: "" };
+    setOutputLevel(0);
     setStatus("connecting");
     streamRef.current = mediaStream;
     setMicEnabledState(mediaStream.getAudioTracks().some((track) => track.enabled));
     setCameraEnabledState(mediaStream.getVideoTracks().some((track) => track.enabled));
+
     try {
       const credentials = await getLiveInterviewToken(config);
-      const outputContext = new AudioContext({ sampleRate: 24000 });
-      const inputContext = new AudioContext();
+      const outputContext = new AudioContext({ sampleRate: 24000, latencyHint: "interactive" });
+      const inputContext = new AudioContext({ latencyHint: "interactive" });
       outputContextRef.current = outputContext;
       inputContextRef.current = inputContext;
+
       const outputGain = outputContext.createGain();
       const compressor = outputContext.createDynamicsCompressor();
-      outputGain.gain.value = 1.12;
+      outputGain.gain.value = speakerEnabled ? 1.12 : 0;
       compressor.threshold.value = -24;
       compressor.knee.value = 18;
       compressor.ratio.value = 3;
@@ -154,13 +233,22 @@ export default function useGeminiLiveInterview(config) {
         model: credentials.model,
         config: {},
         callbacks: {
-          onopen: () => setStatus("connected"),
+          onopen: () => {
+            setConnectionMs(Math.round(performance.now() - connectedAtRef.current));
+            setNotice(credentials.chargedTokens ? `${credentials.chargedTokens} credits used for this live room.` : "Secure room connected.");
+            setStatus("connected");
+          },
           onmessage: (message) => {
             const content = message.serverContent;
-            if (content?.interrupted) stopOutput();
+            if (content?.interrupted) {
+              stopOutput();
+              setStatus("listening");
+              setNotice("Interruption detected. Listening to you now.");
+            }
             if (content?.inputTranscription?.text) {
               speechHeardRef.current = true;
-              window.clearTimeout(responseTimerRef.current);
+              clearVoiceTimers();
+              setNotice("");
               addTranscript("candidate", content.inputTranscription.text);
             }
             if (content?.outputTranscription?.text) addTranscript("interviewer", content.outputTranscription.text);
@@ -168,9 +256,15 @@ export default function useGeminiLiveInterview(config) {
               if (part.inlineData?.data) playPcm(part.inlineData.data);
             });
             if (content?.turnComplete) {
-              setTranscript((current) => current.map((item, index) => index === current.length - 1 ? { ...item, final: true } : item));
+              flushTranscript();
+              transcriptSourceRef.current = { candidate: "", interviewer: "" };
+              setTranscript((current) => current.map((item, index) =>
+                index === current.length - 1 ? { ...item, final: true } : item));
               setStatus("listening");
               scheduleNoAnswerPrompt();
+            }
+            if (message.goAway?.timeLeft) {
+              setNotice("The interview connection will refresh shortly.");
             }
           },
           onerror: () => {
@@ -178,63 +272,114 @@ export default function useGeminiLiveInterview(config) {
             setStatus("error");
           },
           onclose: () => {
-            if (!intentionalCloseRef.current) setStatus("disconnected");
+            if (!intentionalCloseRef.current) {
+              setError("The live connection ended. Rejoin to continue.");
+              setStatus("disconnected");
+            }
           },
         },
       });
       sessionRef.current = liveSession;
 
+      const audioTrack = mediaStream.getAudioTracks()[0];
+      if (!audioTrack) throw new Error("A microphone is required for the live interview.");
+      audioTrack.onended = () => {
+        setMicEnabledState(false);
+        setInputLevel(0);
+        setError("Microphone disconnected. Reconnect it, then rejoin the room.");
+        sessionRef.current?.sendRealtimeInput?.({ audioStreamEnd: true });
+      };
+      mediaStream.getVideoTracks().forEach((track) => {
+        track.onended = () => setCameraEnabledState(false);
+      });
+
       const source = inputContext.createMediaStreamSource(mediaStream);
-      const processor = inputContext.createScriptProcessor(4096, 1, 1);
+      const processor = inputContext.createScriptProcessor(2048, 1, 1);
       const silentGain = inputContext.createGain();
       silentGain.gain.value = 0;
       processorRef.current = processor;
       processor.onaudioprocess = (event) => {
-        if (!sessionRef.current || !mediaStream.getAudioTracks()[0]?.enabled) return;
+        if (!sessionRef.current || !audioTrack.enabled) return;
         const input = event.inputBuffer.getChannelData(0);
         let energy = 0;
         for (let index = 0; index < input.length; index += 4) energy += input[index] * input[index];
         const rms = Math.sqrt(energy / Math.ceil(input.length / 4));
+        const now = performance.now();
+        if (now - levelUpdatedAtRef.current > 100) {
+          setInputLevel(Math.min(1, rms * 18));
+          levelUpdatedAtRef.current = now;
+        }
         if (rms > 0.012) {
           speechHeardRef.current = true;
-          window.clearTimeout(responseTimerRef.current);
+          clearVoiceTimers();
+          setNotice("");
         }
         const pcm = downsampleToPcm16(input, inputContext.sampleRate);
-        sessionRef.current.sendRealtimeInput({ audio: { data: bytesToBase64(pcm), mimeType: "audio/pcm;rate=16000" } });
+        sessionRef.current.sendRealtimeInput({
+          audio: { data: bytesToBase64(pcm), mimeType: "audio/pcm;rate=16000" },
+        });
       };
       source.connect(processor);
       processor.connect(silentGain);
       silentGain.connect(inputContext.destination);
 
       const canvas = document.createElement("canvas");
-      canvas.width = 512;
-      canvas.height = 384;
-      const context = canvas.getContext("2d", { alpha: false });
-      videoTimerRef.current = window.setInterval(() => {
+      canvas.width = 320;
+      canvas.height = 240;
+      const context = canvas.getContext("2d", { alpha: false, desynchronized: true });
+      const sendVideoFrame = async () => {
         const videoTrack = mediaStream.getVideoTracks()[0];
-        if (!sessionRef.current || !videoTrack?.enabled || !videoElement?.videoWidth) return;
-        context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-        const data = canvas.toDataURL("image/jpeg", 0.55).split(",")[1];
-        sessionRef.current.sendRealtimeInput({ video: { data, mimeType: "image/jpeg" } });
-      }, 1200);
+        if (frameSendingRef.current || document.hidden || !sessionRef.current ||
+            !videoTrack?.enabled || !videoElement?.videoWidth) return;
+        frameSendingRef.current = true;
+        try {
+          context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+          const blob = await canvasBlob(canvas);
+          if (!blob || !sessionRef.current) return;
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          sessionRef.current.sendRealtimeInput({
+            video: { data: bytesToBase64(bytes), mimeType: "image/jpeg" },
+          });
+        } finally {
+          frameSendingRef.current = false;
+        }
+      };
+      videoTimerRef.current = window.setInterval(sendVideoFrame, 1800);
+      window.setTimeout(sendVideoFrame, 300);
       liveSession.sendClientContent({ turns: "Begin the interview now.", turnComplete: true });
     } catch (startError) {
       close("error");
-      setError(startError?.response?.data?.message || startError?.message || "Could not join the live interview.");
+      const message = startError?.response?.data?.message || startError?.message || "Could not join the live interview.";
+      setError(message);
       throw startError;
     }
-  }, [addTranscript, close, config, playPcm, scheduleNoAnswerPrompt, status, stopOutput]);
+  }, [addTranscript, clearVoiceTimers, close, config, flushTranscript, playPcm, scheduleNoAnswerPrompt, speakerEnabled, status, stopOutput]);
 
   const setMicEnabled = useCallback((enabled) => {
     streamRef.current?.getAudioTracks().forEach((track) => { track.enabled = enabled; });
-    if (!enabled) sessionRef.current?.sendRealtimeInput?.({ audioStreamEnd: true });
+    if (!enabled) {
+      sessionRef.current?.sendRealtimeInput?.({ audioStreamEnd: true });
+      setInputLevel(0);
+      setNotice("Microphone muted.");
+    } else {
+      setNotice("Microphone is live.");
+    }
     setMicEnabledState(enabled);
   }, []);
 
   const setCameraEnabled = useCallback((enabled) => {
     streamRef.current?.getVideoTracks().forEach((track) => { track.enabled = enabled; });
-    setCameraEnabledState(enabled);
+    setCameraEnabledState(enabled && Boolean(streamRef.current?.getVideoTracks().length));
   }, []);
+
+  const setSpeakerEnabled = useCallback((enabled) => {
+    const context = outputContextRef.current;
+    const gain = outputGainRef.current;
+    if (context && gain) gain.gain.setTargetAtTime(enabled ? 1.12 : 0, context.currentTime, 0.025);
+    if (!enabled) stopOutput();
+    setSpeakerEnabledState(enabled);
+    setNotice(enabled ? "Speaker on." : "Speaker muted.");
+  }, [stopOutput]);
 
   useEffect(() => {
     const stopWhenHidden = () => { if (document.hidden && sessionRef.current) close("paused-background"); };
@@ -248,5 +393,9 @@ export default function useGeminiLiveInterview(config) {
     };
   }, [close]);
 
-  return { status, error, transcript, micEnabled, cameraEnabled, start, close, setMicEnabled, setCameraEnabled };
+  return {
+    status, error, notice, transcript, connectionMs, inputLevel, outputLevel,
+    micEnabled, cameraEnabled, speakerEnabled,
+    start, close, setMicEnabled, setCameraEnabled, setSpeakerEnabled,
+  };
 }

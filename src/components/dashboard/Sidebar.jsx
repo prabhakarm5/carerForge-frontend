@@ -18,7 +18,7 @@ import RechargeModal from "../common/recharge/RechargeModal";
 import WorkspaceHistoryPanel from "./WorkspaceHistoryPanel";
 import BrandLogo from "../../shared/BrandLogo";
 
-const SEARCH_DEBOUNCE_MS = 300;
+const SEARCH_DEBOUNCE_MS = 550;
 const SIDEBAR_STORAGE_KEY = "sidebar_expanded";
 const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 const REFRESH_EVENT = "cf:conversations:refresh";

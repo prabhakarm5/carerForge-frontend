@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Activity, AppWindow, CreditCard, LayoutDashboard, LifeBuoy, LogOut, RefreshCw, ServerCog, Tag, Users } from "lucide-react";
 import toast from "react-hot-toast";
 import BrandLogo from "../../shared/BrandLogo";
@@ -19,18 +20,20 @@ import "./admin.css";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "traffic", label: "Traffic", icon: Activity },
   { id: "users", label: "Users", icon: Users },
-  { id: "plans", label: "Plans", icon: CreditCard },
   { id: "promos", label: "Promos", icon: Tag },
+  { id: "plans", label: "Plans", icon: CreditCard },
+  { id: "traffic", label: "Traffic", icon: Activity },
   { id: "support", label: "Support", icon: LifeBuoy },
   { id: "system", label: "System", icon: ServerCog },
 ];
+const TAB_IDS = new Set(TABS.map((tab) => tab.id));
 
 export default function AdminDashboardPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const user = useAuthStore((state) => state.user);
   const logoutEverywhere = useAuthStore((state) => state.logoutEverywhere);
-  const [activeTab, setActiveTab] = useState("overview");
+  const activeTab = TAB_IDS.has(searchParams.get("tab")) ? searchParams.get("tab") : "overview";
   const [overview, setOverview] = useState(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [usersPage, setUsersPage] = useState(null);
@@ -123,6 +126,13 @@ export default function AdminDashboardPage() {
     return () => window.clearTimeout(timer);
   }, [selectedUserId, loadActivity]);
 
+
+  const selectTab = (tab) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  };
+
   const activeMeta = useMemo(() => TABS.find((tab) => tab.id === activeTab), [activeTab]);
 
   const actOnUser = async (account, action) => {
@@ -162,9 +172,9 @@ export default function AdminDashboardPage() {
   const signOut = async () => { await logoutEverywhere(); window.location.assign("/admin/login"); };
 
   return <div className="admin-shell admin-console">
-    <aside className="admin-sidebar"><BrandLogo size="sm" /><nav aria-label="Admin navigation">{TABS.map(({ id, label, icon: Icon }) => <button key={id} className={activeTab === id ? "active" : ""} onClick={() => setActiveTab(id)} title={label}><Icon size={17} /><span>{label}</span></button>)}</nav><div className="admin-sidebar-user"><span>{user?.name?.slice(0, 1)?.toUpperCase() || "A"}</span><div><strong>{user?.name || "Administrator"}</strong><small>{user?.email}</small></div></div></aside>
+    <aside className="admin-sidebar"><BrandLogo size="sm" /><nav aria-label="Admin navigation">{TABS.map(({ id, label, icon: Icon }) => <button key={id} className={activeTab === id ? "active" : ""} onClick={() => selectTab(id)} title={label}><Icon size={17} /><span>{label}</span></button>)}</nav><div className="admin-sidebar-user"><span>{user?.name?.slice(0, 1)?.toUpperCase() || "A"}</span><div><strong>{user?.name || "Administrator"}</strong><small>{user?.email}</small></div></div></aside>
     <div className="admin-workspace"><header className="admin-topbar"><div><span className="admin-live-dot" /><div><h1>{activeMeta?.label}</h1><p>Secure operations console - live data updates every 30 seconds</p></div></div><div className="admin-topbar-actions"><button title="Open user app" onClick={() => window.location.assign("/dashboard")}><AppWindow size={17} /></button><button title="Refresh current section" onClick={refreshCurrent}><RefreshCw size={17} /></button><button title="Sign out everywhere" onClick={signOut}><LogOut size={17} /></button></div></header>
-      <nav className="admin-mobile-tabs">{TABS.map(({ id, label, icon: Icon }) => <button key={id} className={activeTab === id ? "active" : ""} onClick={() => setActiveTab(id)}><Icon size={16} /><span>{label}</span></button>)}</nav>
+      <nav className="admin-mobile-tabs">{TABS.map(({ id, label, icon: Icon }) => <button key={id} className={activeTab === id ? "active" : ""} onClick={() => selectTab(id)}><Icon size={16} /><span>{label}</span></button>)}</nav>
       <main className="admin-main">{error && <div className="admin-error-banner"><span>{error}</span><button onClick={loadOverview}>Retry</button></div>}
         {["overview", "traffic"].includes(activeTab) && overviewLoading && !overview ? <LoadingState label="Loading operations data" /> : <>
           {activeTab === "overview" && overview && <OverviewPanel overview={overview} />}

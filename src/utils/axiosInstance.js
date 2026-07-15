@@ -1,6 +1,7 @@
 import axios from "axios";
 import { API_BASE_URL } from "../config/api";
 import useAuthStore from "../store/authStore";
+import { isForegroundActive, onForegroundActivity } from "./authActivity";
 
 const axiosInstance = axios.create({
     baseURL: API_BASE_URL,
@@ -26,25 +27,11 @@ let crossTabWaiters = [];
 // app.jwt.access-token-expiry: 15m ke hisaab se buffer rakha hai.
 const REFRESH_BUFFER_MS = 60 * 1000;
 
-// ✅ NEW — jab server hi down/unreachable ho (aapne server band kiya ho,
-// restart kar rahe ho, network gaya, etc.), to chup-chaap dobara refresh
-// try karega. Ye "refresh token invalid hai" wala case NAHI hai, isliye
-// is retry ke dauraan user ko logout/redirect kabhi nahi hoga.
-//
-// ✅ FIX (round 2) — pehle ye FIXED 8s interval pe retry karta tha, jo
-// backend lambe time down rehne par bewajah baar-baar hit karta rehta.
-// Ab EXPONENTIAL BACKOFF: 5s -> 10s -> 20s -> 30s (cap), taaki backend
-// par load kam se kam pade. Successful refresh milte hi counter reset.
-const SERVER_DOWN_BASE_RETRY_DELAY_MS = 5 * 1000;
-const SERVER_DOWN_MAX_RETRY_DELAY_MS = 30 * 1000;
-let serverDownRetryTimerId = null;
-let serverDownRetryAttempt = 0;
-
-function getServerDownRetryDelay() {
-    const delay =
-        SERVER_DOWN_BASE_RETRY_DELAY_MS * Math.pow(2, serverDownRetryAttempt);
-    return Math.min(delay, SERVER_DOWN_MAX_RETRY_DELAY_MS);
-}
+// Refresh only on foreground demand. A temporary failure gets a short cooldown;
+// there is no background retry loop and no logout unless refresh returns 401.
+let refreshPending = false;
+let nextRefreshAttemptAt = 0;
+const REFRESH_RETRY_COOLDOWN_MS = 15 * 1000;
 
 function getCsrfTokenFromCookie() {
     const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
@@ -57,6 +44,14 @@ function processQueue(error, token = null) {
         else promise.resolve(token);
     });
     failedQueue = [];
+}
+
+function settleRefreshWaiters(error, token = null) {
+    crossTabWaiters.forEach(({ resolve, reject }) => {
+        if (error) reject(error);
+        else resolve(token);
+    });
+    crossTabWaiters = [];
 }
 
 // ✅ NEW — server "down/unreachable" vs "responded but refresh token
@@ -90,30 +85,6 @@ function isAuthBootstrapRequest(url = "") {
         || url.includes("/api/auth/verify-admin-login-otp")
         || url.includes("/api/auth/resend-admin-login-otp");
 }
-function clearServerDownRetryTimer() {
-    if (serverDownRetryTimerId) {
-        clearTimeout(serverDownRetryTimerId);
-        serverDownRetryTimerId = null;
-    }
-}
-
-function scheduleServerDownRetry() {
-    // Agar pehle se ek retry schedule hai to dobara stack mat karo
-    if (serverDownRetryTimerId) return;
-
-    const delay = getServerDownRetryDelay();
-    serverDownRetryAttempt += 1;
-
-    serverDownRetryTimerId = setTimeout(() => {
-        serverDownRetryTimerId = null;
-        silentRefresh().catch(() => {
-            // silentRefresh apne andar hi agla retry schedule kar dega
-            // (agar phir se server-down mila) ya logout handle kar dega
-            // (agar ab genuinely refresh token invalid mila)
-        });
-    }, delay);
-}
-
 // ================= PROACTIVE REFRESH SCHEDULER =================
 function scheduleProactiveRefresh() {
     if (refreshTimerId) {
@@ -129,9 +100,12 @@ function scheduleProactiveRefresh() {
     const delay = Math.max(refreshAt - now, 0);
 
     refreshTimerId = setTimeout(() => {
+        if (!isForegroundActive()) {
+            refreshPending = true;
+            return;
+        }
         silentRefresh().catch(() => {
-            // silentRefresh apne andar hi logout/redirect (ya server-down
-            // retry) handle karta hai
+            // A failed refresh is retried by the next active request.
         });
     }, delay);
 }
@@ -172,36 +146,34 @@ setTimeout(() => {
 // jagah se call hota hai — dono ek hi refresh-logic + cross-tab lock
 // share karte hain.
 async function silentRefresh() {
+    if (refreshPending && Date.now() < nextRefreshAttemptAt) {
+        const deferred = new Error("Token refresh is waiting for the next active request.");
+        deferred.code = "REFRESH_DEFERRED";
+        throw deferred;
+    }
+
     if (isRefreshing) {
-        return new Promise((resolve) => {
-            crossTabWaiters.push(resolve);
+        return new Promise((resolve, reject) => {
+            crossTabWaiters.push({ resolve, reject });
         });
     }
 
     isRefreshing = true;
     refreshChannel?.postMessage({ type: "REFRESH_STARTED" });
 
-    // ✅ NEW — DEBUG LOG: har refresh-token attempt ka timestamp Console
-    // mein print hoga, taaki Network tab ke filter/setting se independent
-    // ho ke bhi ye verify kiya ja sake ki refresh-token call kitni baar
-    // aur kitne gap pe ho rahi hai. Chaho to production mein ye line
-    // hata sakte ho — sirf debugging ke liye hai.
-    console.log(`[auth] refresh-token attempt @ ${new Date().toLocaleTimeString()}`);
 
     try {
         const { data } = await axiosInstance.post("/api/auth/refresh-token");
-
-        // Refresh safal — server-down retry state poori tarah reset karo
-        clearServerDownRetryTimer();
-        serverDownRetryAttempt = 0;
-
-        console.log(`[auth] refresh-token SUCCESS @ ${new Date().toLocaleTimeString()}`);
+        refreshPending = false;
+        nextRefreshAttemptAt = 0;
+        useAuthStore.getState().markBackendReachable?.();
 
         // ✅ Store ka apna setAccessToken use karo — wahi expiry bhi
         // decode kar leta hai, subscribe wapas timer reschedule kar dega
         useAuthStore.getState().setAccessToken(data.accessToken);
 
         processQueue(null, data.accessToken);
+        settleRefreshWaiters(null, data.accessToken);
         refreshChannel?.postMessage({
             type: "REFRESH_SUCCESS",
             accessToken: data.accessToken,
@@ -210,44 +182,29 @@ async function silentRefresh() {
         return data.accessToken;
 
     } catch (e) {
-        if (isServerUnreachable(e)) {
-            // ✅ FIX — Server abhi DOWN/unreachable hai (aapne server
-            // band kiya hua hai / restart ho raha hai / network issue) —
-            // iska ye matlab BILKUL nahi ki refreshToken invalid/expired
-            // hai. Pehle yahan bhi seedha logout + redirect("/") ho jaata
-            // tha, isliye jab bhi backend thodi der ke liye down hota
-            // tha, beech mein user "/" (aur phir wapas login) pe fek
-            // diya jaata tha — yahi bug tha.
-            //
-            // Ab: session/user state ko bilkul chhedo mat, sirf abhi
-            // waiting sab requests ko reject karo, aur exponential
-            // backoff ke saath khud phir try karo (backend par load kam
-            // rakhne ke liye). Server wapas up hote hi silently naya
-            // token mil jaayega aur user ko pata bhi nahi chalega ki
-            // beech mein server down tha.
-            processQueue(e);
-            refreshChannel?.postMessage({ type: "REFRESH_FAILED" });
+        const status = e.response?.status;
+        const invalidSession = status === 401;
 
-            const nextDelay = getServerDownRetryDelay();
-            console.log(
-                `[auth] refresh-token FAILED (server unreachable) @ ${new Date().toLocaleTimeString()} — retrying in ${nextDelay / 1000}s`
-            );
+        processQueue(e);
+        settleRefreshWaiters(e);
+        refreshChannel?.postMessage({ type: "REFRESH_FAILED", invalidSession });
 
-            scheduleServerDownRetry();
-            throw e;
+        if (invalidSession) {
+            refreshPending = false;
+            useAuthStore.getState().logoutLocalOnly();
+            if (!window.location.pathname.startsWith("/login")) {
+                window.location.replace("/login?reason=session-expired");
+            }
+        } else {
+            // Network, CSRF/access denial, throttling and server errors must
+            // never clear a valid local session. Retry only on active demand.
+            refreshPending = true;
+            nextRefreshAttemptAt = Date.now() + REFRESH_RETRY_COOLDOWN_MS;
+            if (isServerUnreachable(e) || status >= 500) {
+                useAuthStore.getState().markBackendUnreachable?.();
+            }
         }
 
-        // ✅ Yahan sirf tab aayenge jab server ne ACTUALLY respond kiya
-        // (401 / 403 / etc.) — matlab refreshToken cookie invalid,
-        // expired, revoked, ya missing hai. Yahi asli "session khatam"
-        // case hai, isliye sirf yahi logout + redirect deserve karta hai.
-        serverDownRetryAttempt = 0;
-        processQueue(e);
-        refreshChannel?.postMessage({ type: "REFRESH_FAILED" });
-        useAuthStore.getState().logoutLocalOnly();
-
-        // ✅ FIX — "/" nahi, seedha "/login" page pe bhejo
-        window.location.replace("/login?reason=session-expired");
         throw e;
 
     } finally {
@@ -255,30 +212,64 @@ async function silentRefresh() {
     }
 }
 
+export async function refreshAccessTokenOnDemand() {
+    return silentRefresh();
+}
 // ================= CROSS-TAB SYNC =================
 if (refreshChannel) {
     refreshChannel.onmessage = (event) => {
-        const { type, accessToken } = event.data || {};
+        const { type, accessToken, invalidSession } = event.data || {};
 
         if (type === "REFRESH_STARTED") {
             isRefreshing = true;
         }
 
         if (type === "REFRESH_SUCCESS") {
-            clearServerDownRetryTimer();
-            serverDownRetryAttempt = 0;
+            refreshPending = false;
+            nextRefreshAttemptAt = 0;
             useAuthStore.getState().setAccessToken(accessToken);
-            crossTabWaiters.forEach((resolve) => resolve(accessToken));
-            crossTabWaiters = [];
+            useAuthStore.getState().markBackendReachable?.();
+            settleRefreshWaiters(null, accessToken);
             isRefreshing = false;
         }
 
         if (type === "REFRESH_FAILED") {
-            crossTabWaiters = [];
+            const refreshError = new Error(invalidSession ? "Session expired" : "Token refresh unavailable");
+            settleRefreshWaiters(refreshError);
             isRefreshing = false;
+
+            if (invalidSession) {
+                refreshPending = false;
+                useAuthStore.getState().logoutLocalOnly();
+                if (document.visibilityState === "visible" && !window.location.pathname.startsWith("/login")) {
+                    window.location.replace("/login?reason=session-expired");
+                }
+            } else {
+                refreshPending = true;
+                nextRefreshAttemptAt = Date.now() + REFRESH_RETRY_COOLDOWN_MS;
+            }
         }
     };
 }
+
+onForegroundActivity(() => {
+    if (!refreshPending || !isForegroundActive() || isRefreshing || Date.now() < nextRefreshAttemptAt) {
+        return;
+    }
+
+    const { user, accessToken, accessTokenExpiresAt } = useAuthStore.getState();
+    const refreshNeeded = user && (!accessToken || !accessTokenExpiresAt
+        || accessTokenExpiresAt <= Date.now() + REFRESH_BUFFER_MS);
+
+    if (!refreshNeeded) {
+        refreshPending = false;
+        return;
+    }
+
+    silentRefresh().catch(() => {
+        // The next active request can retry after the cooldown.
+    });
+});
 
 // ================= REQUEST INTERCEPTOR =================
 axiosInstance.interceptors.request.use(async (config) => {
@@ -287,14 +278,21 @@ axiosInstance.interceptors.request.use(async (config) => {
     config.headers["X-Client-Timezone"] = Intl.DateTimeFormat().resolvedOptions().timeZone || "Unknown";
     config.headers["X-Client-Locale"] = navigator.language || "Unknown";
 
-    // Dashboard ke multiple widgets login ke turant baad ek saath protected
-    // APIs hit karte hain. Agar memory accessToken abhi hydrate nahi hua,
-    // pehle refresh cookie se token lao, phir request bhejo.
-    if (!accessToken && !isAuthBootstrapRequest(requestUrl) && useAuthStore.getState().user) {
-        try {
-            accessToken = await silentRefresh();
-        } catch {
-            accessToken = null;
+    const { user, accessTokenExpiresAt } = useAuthStore.getState();
+    const refreshNeeded = !accessToken
+        || (accessTokenExpiresAt && accessTokenExpiresAt <= Date.now() + 5_000);
+
+    // A protected request refreshes only when the foreground user needs it.
+    // Background polling never wakes the refresh endpoint.
+    if (refreshNeeded && !isAuthBootstrapRequest(requestUrl) && user) {
+        if (isForegroundActive()) {
+            try {
+                accessToken = await silentRefresh();
+            } catch {
+                accessToken = useAuthStore.getState().accessToken;
+            }
+        } else {
+            refreshPending = true;
         }
     }
 
@@ -334,6 +332,11 @@ axiosInstance.interceptors.response.use(
         }
 
         if (originalRequest.url?.includes("/auth/refresh-token")) {
+            return Promise.reject(error);
+        }
+
+        if (!isForegroundActive()) {
+            refreshPending = true;
             return Promise.reject(error);
         }
 

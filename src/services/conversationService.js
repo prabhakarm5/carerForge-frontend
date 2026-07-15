@@ -1,4 +1,5 @@
 import axiosInstance from "../utils/axiosInstance";
+import { dedupeRead, invalidateRead } from "../utils/requestDedupe";
 
 import {
     API,
@@ -19,10 +20,10 @@ import {
 // ================= MODELS (for the model-selector dropdown) =================
 
 export async function getModels() {
-    const response = await axiosInstance.get(
-        API_BASE_URL + API.CHAT.MODELS
-    );
-    return response.data; // [{ id, label, description, vision }, ...]
+    return dedupeRead("chat:models", async () => {
+        const response = await axiosInstance.get(API_BASE_URL + API.CHAT.MODELS);
+        return response.data;
+    }, 60_000);
 }
 
 // ================= SEND MESSAGE =================
@@ -38,34 +39,37 @@ export async function sendMessage(request) {
 // ================= GET CONVERSATION =================
 
 export async function getConversation(conversationId) {
-    const response = await axiosInstance.get(
-        API_BASE_URL + API.CONVERSATIONS.GET_BY_ID(conversationId)
-    );
-    return response.data;
+    return dedupeRead(`chat:conversation:${conversationId}`, async () => {
+        const response = await axiosInstance.get(API_BASE_URL + API.CONVERSATIONS.GET_BY_ID(conversationId));
+        return response.data;
+    }, 600);
 }
 
 export async function getConversationStatus(conversationId) {
-    const response = await axiosInstance.get(
-        API_BASE_URL + "/api/conversations/" + conversationId + "/status"
-    );
-    return response.data;
+    return dedupeRead(`chat:status:${conversationId}`, async () => {
+        const response = await axiosInstance.get(API_BASE_URL + "/api/conversations/" + conversationId + "/status");
+        return response.data;
+    }, 2_000);
 }
 // ================= GET RECENT =================
 
 export async function getRecentChats() {
-    const response = await axiosInstance.get(
-        API_BASE_URL + API.CONVERSATIONS.GET_RECENT
-    );
-    return response.data;
+    return dedupeRead("chat:recent", async () => {
+        const response = await axiosInstance.get(API_BASE_URL + API.CONVERSATIONS.GET_RECENT);
+        return response.data;
+    }, 1_200);
 }
 
 // ================= SEARCH =================
 
 export async function searchChats(keyword) {
-    const response = await axiosInstance.get(
-        API_BASE_URL + API.CONVERSATIONS.SEARCH + "?keyword=" + keyword
-    );
-    return response.data;
+    const normalized = keyword.trim();
+    return dedupeRead(`chat:search:${normalized.toLowerCase()}`, async () => {
+        const response = await axiosInstance.get(API_BASE_URL + API.CONVERSATIONS.SEARCH, {
+            params: { keyword: normalized },
+        });
+        return response.data;
+    }, 1_000);
 }
 
 // ================= ARCHIVE =================
@@ -75,6 +79,7 @@ export async function archiveChat(id) {
         API_BASE_URL + API.CONVERSATIONS.ARCHIVE(id),
         {}
     );
+    invalidateRead("chat:");
     return response.data;
 }
 
@@ -85,6 +90,7 @@ export async function restoreChat(id) {
         API_BASE_URL + API.CONVERSATIONS.RESTORE(id),
         {}
     );
+    invalidateRead("chat:");
     return response.data;
 }
 
@@ -94,6 +100,7 @@ export async function deleteChat(id) {
     const response = await axiosInstance.delete(
         API_BASE_URL + API.CONVERSATIONS.DELETE(id)
     );
+    invalidateRead("chat:");
     return response.data;
 }
 
@@ -104,5 +111,6 @@ export async function renameChat(id, title) {
         API_BASE_URL + API.CONVERSATIONS.RENAME(id),
         { title }
     );
+    invalidateRead("chat:");
     return response.data;
 }

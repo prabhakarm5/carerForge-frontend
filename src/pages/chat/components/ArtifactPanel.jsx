@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ChevronLeft, Code, Copy, Download, FileText, X } from "lucide-react";
+import { Check, ChevronLeft, Code, Copy, Download, Eye, FileText, X } from "lucide-react";
 
 const LANG_COLORS = {
   javascript: "#f7df1e", typescript: "#3178c6", java: "#ed8b00",
@@ -49,6 +49,8 @@ export default function ArtifactPanel({ panel, onClose, isMobile, renderDocument
   function handleDownload() {
     if (isDocument) {
       downloadAsFile(panel.content, `${slugify(panel.title)}.md`);
+    } else if (canPreview) {
+      downloadAsFile(panel.content, `${slugify(panel.title || "generated-page")}.html`);
     } else {
       downloadSnippet(panel.content, panel.lang);
     }
@@ -102,13 +104,13 @@ export default function ArtifactPanel({ panel, onClose, isMobile, renderDocument
           {isDocument ? <FileText size={14} color="#64748b" style={{ flexShrink: 0 }} /> : <Code size={14} color="#64748b" style={{ flexShrink: 0 }} />}
           <span style={{
             fontSize: 12, fontWeight: 700,
-            color: isDocument ? "#e2e8f0" : color,
-            fontFamily: isDocument ? "inherit" : "monospace",
-            textTransform: isDocument ? "none" : "uppercase",
-            letterSpacing: isDocument ? "normal" : "0.08em",
+            color: isDocument || canPreview ? "#e2e8f0" : color,
+            fontFamily: isDocument || canPreview ? "inherit" : "monospace",
+            textTransform: isDocument || canPreview ? "none" : "uppercase",
+            letterSpacing: isDocument || canPreview ? "normal" : "0.08em",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>
-            {isDocument ? (panel.title || "Document") : panel.lang}
+            {isDocument ? (panel.title || "Document") : (panel.title || panel.lang)}
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
@@ -119,6 +121,7 @@ export default function ArtifactPanel({ panel, onClose, isMobile, renderDocument
                   key={item}
                   onClick={() => setTab(item)}
                   style={{
+                    display: "inline-flex", alignItems: "center", gap: 5,
                     padding: "4px 8px", borderRadius: 7, border: "none",
                     background: tab === item ? "rgba(124,58,237,0.28)" : "transparent",
                     color: tab === item ? "#fff" : "#64748b",
@@ -126,7 +129,8 @@ export default function ArtifactPanel({ panel, onClose, isMobile, renderDocument
                     textTransform: "capitalize",
                   }}
                 >
-                  {item}
+                  {item === "preview" ? <Eye size={11} /> : <Code size={11} />}
+                  <span>{item}</span>
                 </button>
               ))}
             </div>
@@ -191,7 +195,8 @@ export default function ArtifactPanel({ panel, onClose, isMobile, renderDocument
           <iframe
             title="artifact-preview"
             srcDoc={panel.content}
-            sandbox="allow-scripts allow-forms allow-popups allow-modals"
+            sandbox="allow-scripts allow-forms allow-modals"
+            referrerPolicy="no-referrer"
             style={{ width: "100%", height: "100%", border: "none" }}
           />
         </div>

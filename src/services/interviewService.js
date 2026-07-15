@@ -4,7 +4,7 @@ import { API } from "../config/api";
 const INTERVIEW_TIMEOUT_MS = 90_000;
 
 export async function getLiveInterviewToken(payload) {
-  const response = await axiosInstance.post(API.INTERVIEWS.LIVE_TOKEN, payload, { timeout: 15_000 });
+  const response = await axiosInstance.post(API.INTERVIEWS.LIVE_TOKEN, payload, { timeout: 9_000 });
   return response.data;
 }
 

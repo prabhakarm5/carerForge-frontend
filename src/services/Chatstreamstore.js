@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { getStreamUrl, getStreamAuthHeader } from "../services/chatService";
-import { refreshToken } from "../services/authService";
-import useAuthStore from "../store/authStore";
+import { refreshAccessTokenOnDemand } from "../utils/axiosInstance";
+
 import useConversationListStore from "../store/conversationListStore";
+import { beginForegroundWork, endForegroundWork } from "../utils/authActivity";
 
 function defaultStreamEntry(controller) {
     return {
@@ -248,6 +249,7 @@ const useChatStreamStore = create((set, get) => ({
         }
 
         async function run() {
+            beginForegroundWork();
             try {
                 const csrfToken = getCsrfTokenFromCookie();
 
@@ -273,14 +275,13 @@ const useChatStreamStore = create((set, get) => ({
                 });
 
                 if (response.status === 401) {
-                    const data = await refreshToken();
-                    useAuthStore.getState().setAccessToken(data.accessToken);
+                    const accessToken = await refreshAccessTokenOnDemand();
 
                     response = await fetch(getStreamUrl(), {
                         method: "POST",
                         headers: {
                             ...headers,
-                            Authorization: `Bearer ${data.accessToken}`,
+                            Authorization: `Bearer ${accessToken}`,
                         },
                         credentials: "include",
                         body: JSON.stringify({
@@ -301,8 +302,6 @@ const useChatStreamStore = create((set, get) => ({
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder("utf-8");
                 let sseBuffer = "";
-
-                // eslint-disable-next-line no-constant-condition
                 while (true) {
                     const { value, done } = await reader.read();
                     if (done) break;
@@ -352,6 +351,8 @@ const useChatStreamStore = create((set, get) => ({
                         waiting: false,
                     }));
                 }
+            } finally {
+                endForegroundWork();
             }
         }
 
