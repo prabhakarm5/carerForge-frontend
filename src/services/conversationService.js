@@ -19,7 +19,8 @@ import {
 
 // ================= MODELS (for the model-selector dropdown) =================
 
-export async function getModels() {
+export async function getModels(force = false) {
+    if (force) invalidateRead("chat:models");
     return dedupeRead("chat:models", async () => {
         const response = await axiosInstance.get(API_BASE_URL + API.CHAT.MODELS);
         return response.data;
@@ -38,11 +39,13 @@ export async function sendMessage(request) {
 
 // ================= GET CONVERSATION =================
 
-export async function getConversation(conversationId) {
-    return dedupeRead(`chat:conversation:${conversationId}`, async () => {
+export async function getConversation(conversationId, force = false) {
+    const key = `chat:conversation:${conversationId}`;
+    if (force) invalidateRead(key);
+    return dedupeRead(key, async () => {
         const response = await axiosInstance.get(API_BASE_URL + API.CONVERSATIONS.GET_BY_ID(conversationId));
         return response.data;
-    }, 600);
+    }, force ? 0 : 600);
 }
 
 export async function getConversationStatus(conversationId) {

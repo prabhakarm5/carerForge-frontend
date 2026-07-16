@@ -1,4 +1,4 @@
-import { Activity, Clock3, Cpu, Users } from "lucide-react";
+import { Activity, Clock3, Copy, Cpu, Users } from "lucide-react";
 
 export const formatNumber = (value = 0) => new Intl.NumberFormat("en-IN").format(value);
 export const formatDateTime = (value) => value
@@ -63,14 +63,24 @@ export function MetricList({ title, items = [], color = "cyan" }) {
 }
 
 export function RequestTable({ requests = [], detailed = false }) {
+  const copyIp = (value) => {
+    if (value && navigator.clipboard) navigator.clipboard.writeText(value).catch(() => {});
+  };
   return <div className="admin-table-scroll"><table className="admin-request-table">
-    <thead><tr><th>Time</th><th>Method</th><th>Route</th><th>Status</th><th>Latency</th>{detailed && <><th>IP address</th><th>Location</th><th>Client</th></>}</tr></thead>
+    <thead><tr><th>Time</th><th>Method</th><th>Route</th><th>Status</th><th>Latency</th>{detailed && <><th>User</th><th>IP address</th><th>Outcome</th><th>Response</th><th>Location</th><th>Client</th></>}</tr></thead>
     <tbody>{requests.map((request, index) => <tr key={`${request.timestamp}-${request.path}-${index}`}>
       <td>{formatTime(request.timestamp)}</td><td><span className="admin-method">{request.method}</span></td>
       <td className="admin-route-cell" title={request.path}>{request.path}</td>
       <td><span className={`admin-status ${statusTone(request.status)}`}>{request.status}</span></td>
       <td className={request.durationMs > 750 ? "admin-latency-hot" : ""}>{request.durationMs} ms</td>
-      {detailed && <><td>{request.clientIp || request.maskedIp}</td><td>{request.location || request.country}</td><td className="admin-client-cell" title={request.userAgent}>{request.userAgent || "Unknown"}</td></>}
+      {detailed && <>
+        <td title={request.userEmail || request.user}>{request.userEmail || request.user || "Anonymous"}</td>
+        <td><button type="button" className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-cyan-300 hover:text-cyan-200" onClick={() => copyIp(request.clientIp || request.maskedIp)} title="Copy full IP"><span>{request.clientIp || request.maskedIp}</span><Copy size={12} /></button></td>
+        <td>{request.responseSummary || "Completed"}</td>
+        <td><span className="block max-w-40 truncate" title={request.contentType}>{request.contentType || "Unknown"}</span><small className="text-slate-500">{request.responseBytes ? formatBytes(request.responseBytes) : "Size unavailable"}</small></td>
+        <td>{request.location || request.country}</td>
+        <td className="admin-client-cell" title={request.userAgent}>{request.userAgent || "Unknown"}</td>
+      </>}
     </tr>)}</tbody>
   </table>{!requests.length && <EmptyState label="No requests captured in this window" />}</div>;
 }

@@ -7,6 +7,19 @@ export async function getAdminOverview() {
 }
 
 
+export async function getAdminRequestLogs({ page = 0, size = 25, user = "", status = "", path = "" } = {}) {
+  const response = await axiosInstance.get(API.ADMIN.REQUEST_LOGS, {
+    params: {
+      page,
+      size,
+      ...(user.trim() ? { user: user.trim() } : {}),
+      ...(String(status).trim() ? { status } : {}),
+      ...(path.trim() ? { path: path.trim() } : {}),
+    },
+  });
+  return response.data;
+}
+
 export async function getAdminSystemStatus() {
   const response = await axiosInstance.get(API.ADMIN.SYSTEM_STATUS);
   return response.data;
@@ -97,4 +110,7 @@ export async function replyAdminSupportTicket(id, message) {
 export async function updateAdminSupportStatus(id, status) {
   const response = await axiosInstance.patch("/api/admin/support/tickets/" + id + "/status", { status });
   return response.data;
+}
+export async function deleteAdminSupportTicket(id) {
+  await axiosInstance.delete("/api/admin/support/tickets/" + id);
 }

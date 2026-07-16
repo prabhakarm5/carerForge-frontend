@@ -1157,7 +1157,7 @@
   .admin-search { width: 100%; }
   .admin-users-header { display: grid !important; }
 }
-@media (prefers-reduced-motion: reduce) { .admin-spin, .admin-css-spinner { animation-duration: .01ms !important; } }
+@media (prefers-reduced-motion: reduce) { .admin-spin, .admin-css-spinner { animation: admin-spin .8s linear infinite !important; } }
 .admin-editor select { width: 100%; min-width: 0; border: 1px solid #2a3a52; border-radius: 5px; outline: 0; padding: 10px; color: #edf5ff; background: #08101b; font: 11px inherit; }
 .admin-editor label > small { color: #60758d; font-size: 8px; font-weight: 500; line-height: 1.45; }
 

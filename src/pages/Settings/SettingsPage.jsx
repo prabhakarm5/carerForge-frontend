@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Check, Gauge, Settings2, Trash2 } from "lucide-react";
+import { Check, Gauge, LifeBuoy, Settings2, SlidersHorizontal, Trash2 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import SupportPage from "../Support/SupportPage";
 import toast from "react-hot-toast";
 
 const optionStyle = (active) => ({
@@ -63,7 +65,9 @@ function PreferenceRow({ icon: Icon, title, detail, children }) {
 }
 
 export default function SettingsPage() {
-  const [responseStyle, setResponseStyle] = useState(() => localStorage.getItem("cf_response_style") || "concise");
+  const [params, setParams] = useSearchParams();
+  const activeTab = params.get("tab") === "support" ? "support" : "preferences";
+  const [responseStyle, setResponseStyle] = useState(() => localStorage.getItem("cf_response_style") || "auto");
   const [reduceMotion, setReduceMotion] = useState(() => localStorage.getItem("cf_reduce_motion") === "1");
 
   function notify() {
@@ -91,6 +95,15 @@ export default function SettingsPage() {
     toast.success("Local chat cache cleared");
   }
 
+  if (activeTab === "support") {
+    return (
+      <section className="mx-auto w-full max-w-[1320px] pb-10 text-slate-200">
+        <SettingsTabs active={activeTab} onChange={(tab) => setParams(tab === "support" ? { tab: "support" } : {})} />
+        <SupportPage embedded />
+      </section>
+    );
+  }
+
   return (
     <section style={{ width: "100%", maxWidth: 820, margin: "0 auto", color: "#e2e8f0", padding: "8px 0 48px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0 20px", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
@@ -103,9 +116,15 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      <SettingsTabs active={activeTab} onChange={(tab) => setParams(tab === "support" ? { tab: "support" } : {})} />
+
       <div style={{ paddingTop: 12 }}>
-        <PreferenceRow icon={Gauge} title="Answer length" detail="Concise is faster and uses fewer tokens. Balanced adds more explanation.">
-          <div style={{ display: "flex", gap: 6 }}>
+        <PreferenceRow icon={Gauge} title="Answer length" detail="Auto keeps normal replies short and gives code, pages, and documents the space they need.">
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 6 }}>
+            <button type="button" onClick={() => updateResponseStyle("auto")} style={optionStyle(responseStyle === "auto")}>
+              {responseStyle === "auto" && <Check size={12} style={{ display: "inline", marginRight: 5 }} />}
+              Auto
+            </button>
             <button type="button" onClick={() => updateResponseStyle("concise")} style={optionStyle(responseStyle === "concise")}>
               {responseStyle === "concise" && <Check size={12} style={{ display: "inline", marginRight: 5 }} />}
               Concise
@@ -113,6 +132,10 @@ export default function SettingsPage() {
             <button type="button" onClick={() => updateResponseStyle("balanced")} style={optionStyle(responseStyle === "balanced")}>
               {responseStyle === "balanced" && <Check size={12} style={{ display: "inline", marginRight: 5 }} />}
               Balanced
+            </button>
+            <button type="button" onClick={() => updateResponseStyle("detailed")} style={optionStyle(responseStyle === "detailed")}>
+              {responseStyle === "detailed" && <Check size={12} style={{ display: "inline", marginRight: 5 }} />}
+              Detailed
             </button>
           </div>
         </PreferenceRow>
@@ -134,4 +157,11 @@ export default function SettingsPage() {
       </div>
     </section>
   );
+}
+
+function SettingsTabs({ active, onChange }) {
+  return <nav className="my-4 flex gap-2 border-b border-white/10 pb-3" aria-label="Settings sections">
+    <button type="button" onClick={() => onChange("preferences")} className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-bold ${active === "preferences" ? "bg-cyan-400/10 text-cyan-200" : "text-slate-400 hover:bg-white/5"}`}><SlidersHorizontal size={14} />Preferences</button>
+    <button type="button" onClick={() => onChange("support")} className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-bold ${active === "support" ? "bg-cyan-400/10 text-cyan-200" : "text-slate-400 hover:bg-white/5"}`}><LifeBuoy size={14} />Support</button>
+  </nav>;
 }

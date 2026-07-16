@@ -1,6 +1,9 @@
 const FENCE = String.fromCharCode(96).repeat(3);
 const RAW_HTML_START = /^\s*(?:<!doctype\s+html\b|<html(?:\s|>))/i;
 const RAW_HTML_END = /<\/html\s*>/i;
+const HEADING = /^\s*(#{1,6})\s+(.+)$/;
+const PREVIEW_LINK_HEADING = /(?:one[ -]?click\s+)?preview\s+links?|open\s+in\s+(?:codepen|stackblitz|jsfiddle)/i;
+const DATA_URI_HEADING = /\bdata\s+uri\b/i;
 
 export function looksLikeHtmlDocument(value = "") {
   const source = String(value).trimStart();
@@ -13,6 +16,30 @@ export function artifactTitle(source = "") {
     ?.replace(/\s+/g, " ")
     .trim();
   return title || "Generated web page";
+}
+
+function decodeHtmlDataUri(value = "") {
+  const source = String(value).trim().replace(/^['"]|['"]$/g, "");
+  const comma = source.indexOf(",");
+  if (!/^data:text\/html\b/i.test(source) || comma < 0) return "";
+
+  const metadata = source.slice(0, comma);
+  const payload = source.slice(comma + 1);
+  try {
+    const decoded = /;base64(?:;|$)/i.test(metadata)
+      ? atob(payload.replace(/\s+/g, ""))
+      : decodeURIComponent(payload);
+    return decoded.replace(/\\(?=<\/?[A-Za-z!])/g, "").trim();
+  } catch {
+    return payload.replace(/\\(?=<\/?[A-Za-z!])/g, "").trim();
+  }
+}
+
+function normalizeExternalAnchors(line) {
+  return line.replace(
+    /<a\s+[^>]*href=["'](https?:\/\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
+    (_, href, label) => `[${String(label).replace(/<[^>]+>/g, "").trim() || "Open link"}](${href})`,
+  );
 }
 
 export function normalizeMessageMarkup(raw) {
@@ -29,46 +56,78 @@ export function normalizeMessageMarkup(raw) {
     if (!insideCodeFence && RAW_HTML_START.test(line)) insideRawHtml = true;
     const normalized = insideCodeFence || insideRawHtml
       ? line
-      : line.replace(/<br\s*\/?>/gi, "\n");
+      : normalizeExternalAnchors(line.replace(/<br\s*\/?>/gi, "\n"));
     if (insideRawHtml && RAW_HTML_END.test(line)) insideRawHtml = false;
     return normalized;
   }).join("\n");
 }
 
 function pushTextBlock(blocks, line) {
-  if (line.startsWith("> ")) blocks.push({ type: "quote", content: line.slice(2) });
-  else if (line.startsWith("### ")) blocks.push({ type: "h3", content: line.slice(4) });
-  else if (line.startsWith("## ")) blocks.push({ type: "h2", content: line.slice(3) });
-  else if (line.startsWith("# ")) blocks.push({ type: "h1", content: line.slice(2) });
+  if (/^\s*(?:-{3,}|_{3,}|\*{3,})\s*$/.test(line)) return;
+  const heading = line.match(HEADING);
+  if (heading) {
+    const level = Math.min(3, heading[1].length);
+    blocks.push({ type: `h${level}`, content: heading[2].trim() });
+  } else if (line.startsWith("> ")) blocks.push({ type: "quote", content: line.slice(2) });
   else if (line.startsWith("- ") || line.startsWith("* ")) blocks.push({ type: "li", content: line.slice(2) });
   else if (/^\d+\. /.test(line)) blocks.push({ type: "oli", content: line.replace(/^\d+\. /, "") });
   else blocks.push({ type: "text", content: line });
 }
 
-export function parseContent(raw = "") {
+function artifactFromDataUri(dataUri, deferDecode) {
+  if (deferDecode) {
+    return {
+      type: "artifact",
+      lang: "html",
+      content: "",
+      label: "Generated web page",
+      complete: false,
+    };
+  }
+
+  const content = decodeHtmlDataUri(dataUri);
+  if (!looksLikeHtmlDocument(content)) return null;
+  return {
+    type: "artifact",
+    lang: "html",
+    content,
+    label: artifactTitle(content),
+    complete: RAW_HTML_END.test(content),
+  };
+}
+
+export function parseContent(raw = "", options = {}) {
   const blocks = [];
   const lines = String(raw).split("\n");
+  const deferDataUriDecode = Boolean(options.deferDataUriDecode);
   let i = 0;
 
   while (i < lines.length) {
     const trimmed = lines[i].trimStart();
-    const dataHref = lines[i].match(/<a\s+[^>]*href=["'](data:text\/html[^"']+)["'][^>]*>(.*?)<\/a>/i);
+    const heading = lines[i].match(HEADING);
 
+    if (heading && PREVIEW_LINK_HEADING.test(heading[2])) {
+      i += 1;
+      while (i < lines.length && !HEADING.test(lines[i])) i += 1;
+      continue;
+    }
+
+    if (heading && DATA_URI_HEADING.test(heading[2])) {
+      i += 1;
+      continue;
+    }
+
+    const dataHref = lines[i].match(/<a\s+[^>]*href=["'](data:text\/html[^"']+)["'][^>]*>(.*?)<\/a>/i);
     if (dataHref) {
-      try {
-        const comma = dataHref[1].indexOf(",");
-        const encoded = comma >= 0 ? dataHref[1].slice(comma + 1) : "";
-        const content = decodeURIComponent(encoded);
-        blocks.push({
-          type: "artifact",
-          lang: "html",
-          content,
-          label: dataHref[2]?.replace(/<[^>]+>/g, "").trim() || artifactTitle(content),
-          complete: true,
-        });
-      } catch {
-        pushTextBlock(blocks, lines[i]);
-      }
+      const artifact = artifactFromDataUri(dataHref[1], deferDataUriDecode);
+      if (artifact) blocks.push(artifact);
+      i += 1;
+      continue;
+    }
+
+    if (/^data:text\/html\b/i.test(trimmed)) {
+      const artifact = artifactFromDataUri(trimmed, deferDataUriDecode);
+      if (artifact) blocks.push(artifact);
       i += 1;
       continue;
     }
@@ -86,7 +145,16 @@ export function parseContent(raw = "") {
         closed = true;
         i += 1;
       }
+
       const content = code.join("\n");
+      const dataUriArtifact = /^data:text\/html\b/i.test(content.trim())
+        ? artifactFromDataUri(content.trim(), deferDataUriDecode)
+        : null;
+      if (dataUriArtifact) {
+        blocks.push(dataUriArtifact);
+        continue;
+      }
+
       const normalizedLang = lang.toLowerCase();
       if ((normalizedLang === "html" || normalizedLang === "htm" || normalizedLang === "code")
           && looksLikeHtmlDocument(content)) {

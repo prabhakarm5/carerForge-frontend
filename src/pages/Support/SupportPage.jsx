@@ -28,8 +28,11 @@ function formatDate(value) {
   return new Date(value).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 }
 
-export default function SupportPage() {
+export default function SupportPage({ embedded = false }) {
   const [params, setParams] = useSearchParams();
+  const updateParams = useCallback((next, options) => {
+    setParams(embedded ? { tab: "support", ...next } : next, options);
+  }, [embedded, setParams]);
   const [tickets, setTickets] = useState([]);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -94,7 +97,7 @@ export default function SupportPage() {
       const created = await createSupportTicket(form);
       setSelected(created);
       setCreating(false);
-      setParams({ ticket: created.ticket.id }, { replace: true });
+      updateParams({ ticket: created.ticket.id }, { replace: true });
       await loadTickets();
       toast.success("Support ticket created");
     } catch (error) {
@@ -139,13 +142,13 @@ export default function SupportPage() {
   function startTicket() {
     setCreating(true);
     setSelected(null);
-    setParams({ new: "1" });
+    updateParams({ new: "1" });
   }
 
   function backToList() {
     setSelected(null);
     setCreating(false);
-    setParams({});
+    updateParams({});
   }
 
   return (
@@ -173,7 +176,7 @@ export default function SupportPage() {
             {tickets.map((ticket) => (
               <button
                 key={ticket.id}
-                onClick={() => { setParams({ ticket: ticket.id }); openTicket(ticket.id); }}
+                onClick={() => { updateParams({ ticket: ticket.id }); openTicket(ticket.id); }}
                 className={"w-full rounded-lg border p-3 text-left transition " + (activeId === ticket.id ? "border-cyan-400/40 bg-cyan-400/10" : "border-white/10 bg-white/[.025] hover:bg-white/[.05]")}
               >
                 <div className="mb-2 flex items-start justify-between gap-2"><p className="line-clamp-2 text-xs font-semibold text-slate-100">{ticket.subject}</p><StatusPill status={ticket.status} /></div>

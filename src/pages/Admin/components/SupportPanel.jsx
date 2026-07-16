@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Loader2, MessageSquareText, Send } from "lucide-react";
+import { Loader2, MessageSquareText, Send, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
-  getAdminSupportTicket, getAdminSupportTickets,
+  deleteAdminSupportTicket, getAdminSupportTicket, getAdminSupportTickets,
   replyAdminSupportTicket, updateAdminSupportStatus,
 } from "../../../services/adminService";
 import { LoadingState, SectionHeader } from "./AdminUi";
@@ -48,6 +48,21 @@ export default function SupportPanel() {
     }
   }
 
+  async function removeTicket() {
+    if (!selected || busy || !window.confirm("Delete this support ticket and its messages?")) return;
+    try {
+      setBusy(true);
+      await deleteAdminSupportTicket(selected.ticket.id);
+      setSelected(null);
+      await load();
+      toast.success("Support ticket deleted");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Could not delete ticket");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function send(event) {
     event.preventDefault();
     if (!reply.trim()) return;
@@ -74,13 +89,13 @@ export default function SupportPanel() {
         {tickets.map((ticket) => <button key={ticket.id} onClick={() => open(ticket.id)} className={selected?.ticket?.id === ticket.id ? "active" : ""}>
           <div><strong>{ticket.subject}</strong><span>{ticket.status}</span></div>
           <p>{ticket.category} · {ticket.priority}</p>
-          <small>{ticket.orderId || ticket.userId}</small>
+          <small>{ticket.userName || "Deleted user"} · {ticket.userEmail || ticket.orderId || ticket.userId}</small>
         </button>)}
         {!tickets.length && <div className="admin-support-empty"><MessageSquareText size={22} /><span>No matching tickets</span></div>}
       </section>
       <section className="admin-support-detail">
         {!selected ? <div className="admin-support-empty"><MessageSquareText size={24} /><span>Select a ticket</span></div> : <>
-          <header><div><h3>{selected.ticket.subject}</h3><small>{selected.ticket.orderId || selected.ticket.id}</small></div><select value={selected.ticket.status} disabled={busy} onChange={(event) => changeStatus(event.target.value)}>{STATES.map((value) => <option key={value}>{value}</option>)}</select></header>
+          <header><div><h3>{selected.ticket.subject}</h3><small>{selected.ticket.userName || "Deleted user"} · {selected.ticket.userEmail || selected.ticket.id}</small></div><div className="flex items-center gap-2"><select value={selected.ticket.status} disabled={busy} onChange={(event) => changeStatus(event.target.value)}>{STATES.map((value) => <option key={value}>{value}</option>)}</select><button type="button" onClick={removeTicket} disabled={busy} title="Delete ticket" className="grid h-9 w-9 place-items-center rounded-md border border-rose-400/20 text-rose-300 hover:bg-rose-400/10"><Trash2 size={15} /></button></div></header>
           <div className="admin-support-messages">{selected.messages.map((message) => <article key={message.id} className={message.senderRole === "ROLE_ADMIN" ? "admin" : "user"}><strong>{message.senderRole === "ROLE_ADMIN" ? "Support" : "User"}</strong><p>{message.message}</p></article>)}</div>
           <form onSubmit={send}><textarea rows={2} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Reply to the user..." /><button disabled={busy || !reply.trim()}>{busy ? <Loader2 className="animate-spin" size={15} /> : <Send size={15} />}</button></form>
         </>}

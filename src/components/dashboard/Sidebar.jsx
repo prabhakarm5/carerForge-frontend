@@ -4,7 +4,7 @@ import {
   Plus, LayoutDashboard, MessageSquare, Image, FileText, Mail, Globe, File, BriefcaseBusiness, Video,
   Wallet, Settings, LogOut, Sparkles, X, Search, MoreHorizontal,
   Pencil, Archive, Trash2, Check, RotateCcw, ChevronRight, ChevronUp,
-  PanelLeftClose, PanelLeftOpen, User, Zap, Crown, Star, AlertTriangle, ChevronLeft, LifeBuoy,
+  PanelLeftClose, PanelLeftOpen, User, Zap, Crown, Star, AlertTriangle, ChevronLeft, LifeBuoy, Gift,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -41,7 +41,6 @@ const navItems = [
   { icon: Mail,            text: "Cover Letter", path: "/cover-letter", color: "#22d3ee", bg: "rgba(34,211,238,0.12)" },
   { icon: Video,           text: "Interview", path: "/interview", color: "#34d399", bg: "rgba(52,211,153,0.12)" },
   { icon: BriefcaseBusiness, text: "Live Jobs", path: "/jobs",            color: "#fbbf24", bg: "rgba(251,191,36,0.12)"  },
-  { icon: LifeBuoy, text: "Support", path: "/support", color: "#22d3ee", bg: "rgba(34,211,238,0.12)" },
   { icon: Globe,           text: "Website AI",  path: "/website",         color: "#38bdf8", bg: "rgba(56,189,248,0.12)"  },
   { icon: File,            text: "PDF AI",      path: "/pdf-ai",          color: "#a78bfa", bg: "rgba(167,139,250,0.12)" },
 ];
@@ -253,14 +252,14 @@ function LogoutModal({ open, onClose, onLogoutThis, onLogoutAll }) {
                   <span className="sb-scope-title">{busy === "this" ? "Signing out..." : "This device only"}</span>
                   {busy !== "this" && <span className="sb-scope-sub">End just this session</span>}
                 </span>
-                {busy === "this" && <span className="sb-spinner" />}
+                {busy === "this" && <span className="sb-spinner cf-loading-spinner" />}
               </button>
               <button disabled={!!busy} onClick={runAll} className="sb-scope-btn strong">
                 <span>
                   <span className="sb-scope-title">{busy === "all" ? "Signing out everywhere..." : "All devices"}</span>
                   {busy !== "all" && <span className="sb-scope-sub">Sign out of every session</span>}
                 </span>
-                {busy === "all" && <span className="sb-spinner" />}
+                {busy === "all" && <span className="sb-spinner cf-loading-spinner" />}
               </button>
               <button onClick={onClose} disabled={!!busy} className="sb-cancel-link">Cancel</button>
             </div>
@@ -341,9 +340,10 @@ function AccountMenu({ open, anchorExpanded, anchorBtnRef, user, planInfo, onClo
       <div style={{ padding: 6 }}>
         <MenuRow icon={Zap} label="Plans & tokens" sub="View or upgrade" onClick={() => { onClose(); onOpenPlans(); }} accent />
         <MenuRow icon={Wallet} label="Wallet" onClick={() => { onClose(); navigate("/wallet"); }} />
+        <MenuRow icon={Gift} label="Rewards & promos" onClick={() => { onClose(); navigate("/promos"); }} />
         <MenuRow icon={User} label="Profile" onClick={() => { onClose(); navigate("/profile"); }} />
         <MenuRow icon={Settings} label="Settings" onClick={() => { onClose(); navigate("/settings"); }} />
-        <MenuRow icon={LifeBuoy} label="Support" onClick={() => { onClose(); navigate("/support"); }} />
+        <MenuRow icon={LifeBuoy} label="Support" onClick={() => { onClose(); navigate("/settings?tab=support"); }} />
       </div>
 
       <div style={{ padding: 6, borderTop: "1px solid rgba(255,255,255,0.07)" }}>

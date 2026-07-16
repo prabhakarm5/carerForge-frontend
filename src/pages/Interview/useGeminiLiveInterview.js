@@ -58,6 +58,14 @@ export default function useGeminiLiveInterview(config) {
   const levelUpdatedAtRef = useRef(0);
   const outputLevelUpdatedAtRef = useRef(0);
   const connectedAtRef = useRef(0);
+  const statusRef = useRef("idle");
+  const voiceRunStartedAtRef = useRef(0);
+  const answerVoiceStartedAtRef = useRef(0);
+  const lastAudibleAtRef = useRef(0);
+  const lastCandidateTranscriptAtRef = useRef(0);
+  const clarityTimerRef = useRef(null);
+  const modelResponseTimerRef = useRef(null);
+  const lastInterruptionAtRef = useRef(0);
 
   const [status, setStatus] = useState("idle");
   const [micEnabled, setMicEnabledState] = useState(true);
@@ -69,6 +77,10 @@ export default function useGeminiLiveInterview(config) {
   const [transcript, setTranscript] = useState([]);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   const stopOutput = useCallback(() => {
     sourcesRef.current.forEach((source) => { try { source.stop(); } catch { /* source already ended */ } });
@@ -97,15 +109,24 @@ export default function useGeminiLiveInterview(config) {
     if (!incomingText?.trim()) return;
 
     const previous = transcriptSourceRef.current[role] || "";
-    let delta = incomingText;
 
-    // Gemini may resend the complete partial transcription on every event.
-    // Only append the new suffix; repeated events must not duplicate captions.
+    // Gemini may resend a complete partial or an overlapping suffix.
+    // Keep only genuinely new text so captions never repeat words.
     if (incomingText === previous || previous.endsWith(incomingText)) return;
-    if (incomingText.startsWith(previous)) delta = incomingText.slice(previous.length);
-    transcriptSourceRef.current[role] = incomingText.startsWith(previous)
-      ? incomingText
-      : previous + incomingText;
+    let overlap = 0;
+    if (incomingText.startsWith(previous)) {
+      overlap = previous.length;
+    } else {
+      const maxOverlap = Math.min(previous.length, incomingText.length);
+      for (let size = maxOverlap; size > 0; size -= 1) {
+        if (previous.endsWith(incomingText.slice(0, size))) {
+          overlap = size;
+          break;
+        }
+      }
+    }
+    const delta = incomingText.slice(overlap);
+    transcriptSourceRef.current[role] = previous + delta;
 
     if (!delta) return;
     pendingTranscriptRef.current.push({ role, text: delta });
@@ -117,6 +138,12 @@ export default function useGeminiLiveInterview(config) {
   const clearVoiceTimers = useCallback(() => {
     window.clearTimeout(responseTimerRef.current);
     window.clearTimeout(voiceHintTimerRef.current);
+    window.clearTimeout(clarityTimerRef.current);
+    window.clearTimeout(modelResponseTimerRef.current);
+    responseTimerRef.current = null;
+    voiceHintTimerRef.current = null;
+    clarityTimerRef.current = null;
+    modelResponseTimerRef.current = null;
   }, []);
 
   const close = useCallback((reason = "ended") => {
@@ -137,12 +164,17 @@ export default function useGeminiLiveInterview(config) {
     outputContextRef.current = null;
     outputGainRef.current = null;
     stopOutput();
+    voiceRunStartedAtRef.current = 0;
+    answerVoiceStartedAtRef.current = 0;
+    lastAudibleAtRef.current = 0;
     setInputLevel(0);
     setOutputLevel(0);
     setStatus(reason);
   }, [clearVoiceTimers, stopOutput]);
 
   const playPcm = useCallback(async (base64) => {
+    window.clearTimeout(modelResponseTimerRef.current);
+    modelResponseTimerRef.current = null;
     const context = outputContextRef.current;
     if (!context) return;
     if (context.state === "suspended") await context.resume();
@@ -179,19 +211,32 @@ export default function useGeminiLiveInterview(config) {
   const scheduleNoAnswerPrompt = useCallback(() => {
     clearVoiceTimers();
     speechHeardRef.current = false;
+    answerVoiceStartedAtRef.current = 0;
+    voiceRunStartedAtRef.current = 0;
     voiceHintTimerRef.current = window.setTimeout(() => {
-      if (!speechHeardRef.current && sessionRef.current) {
-        setNotice("No clear voice detected. Check your mic or move closer.");
+      if (!speechHeardRef.current && !answerVoiceStartedAtRef.current && sessionRef.current) {
+        setNotice("I cannot hear an answer yet. Check your microphone or move closer.");
       }
-    }, 4000);
+    }, 5000);
     responseTimerRef.current = window.setTimeout(() => {
-      if (!sessionRef.current || speechHeardRef.current) return;
+      if (!sessionRef.current || speechHeardRef.current || answerVoiceStartedAtRef.current) return;
       sessionRef.current.sendClientContent({
-        turns: "[SESSION EVENT] No clear audible answer has arrived. Briefly check the candidate's microphone, ask whether they need more time, and repeat the current question.",
+        turns: "[SESSION EVENT] The candidate has stayed silent. Politely ask whether the microphone is working or whether they need more time, then repeat the current question once.",
         turnComplete: true,
       });
-    }, 8000);
+    }, 10000);
   }, [clearVoiceTimers]);
+
+  const scheduleModelResponseWatchdog = useCallback(() => {
+    window.clearTimeout(modelResponseTimerRef.current);
+    modelResponseTimerRef.current = window.setTimeout(() => {
+      if (!sessionRef.current || statusRef.current === "interviewer-speaking") return;
+      sessionRef.current.sendClientContent({
+        turns: "[SESSION EVENT] The candidate finished an answer but the interview did not continue. Acknowledge the answer briefly and ask the next relevant follow-up question.",
+        turnComplete: true,
+      });
+    }, 7000);
+  }, []);
 
   const start = useCallback(async (mediaStream, videoElement) => {
     if (sessionRef.current || status === "connecting") return;
@@ -247,11 +292,18 @@ export default function useGeminiLiveInterview(config) {
             }
             if (content?.inputTranscription?.text) {
               speechHeardRef.current = true;
+              lastCandidateTranscriptAtRef.current = Date.now();
+              answerVoiceStartedAtRef.current = 0;
               clearVoiceTimers();
+              scheduleModelResponseWatchdog();
               setNotice("");
               addTranscript("candidate", content.inputTranscription.text);
             }
-            if (content?.outputTranscription?.text) addTranscript("interviewer", content.outputTranscription.text);
+            if (content?.outputTranscription?.text) {
+              window.clearTimeout(modelResponseTimerRef.current);
+              modelResponseTimerRef.current = null;
+              addTranscript("interviewer", content.outputTranscription.text);
+            }
             content?.modelTurn?.parts?.forEach((part) => {
               if (part.inlineData?.data) playPcm(part.inlineData.data);
             });
@@ -286,8 +338,17 @@ export default function useGeminiLiveInterview(config) {
       audioTrack.onended = () => {
         setMicEnabledState(false);
         setInputLevel(0);
+        clearVoiceTimers();
         setError("Microphone disconnected. Reconnect it, then rejoin the room.");
         sessionRef.current?.sendRealtimeInput?.({ audioStreamEnd: true });
+      };
+      audioTrack.onmute = () => {
+        setInputLevel(0);
+        setNotice("Microphone audio stopped. Check the browser or device microphone.");
+      };
+      audioTrack.onunmute = () => {
+        setNotice("Microphone audio restored. You can continue speaking.");
+        scheduleNoAnswerPrompt();
       };
       mediaStream.getVideoTracks().forEach((track) => {
         track.onended = () => setCameraEnabledState(false);
@@ -309,10 +370,45 @@ export default function useGeminiLiveInterview(config) {
           setInputLevel(Math.min(1, rms * 18));
           levelUpdatedAtRef.current = now;
         }
-        if (rms > 0.012) {
-          speechHeardRef.current = true;
-          clearVoiceTimers();
-          setNotice("");
+        const audibleThreshold = 0.016;
+        if (rms > audibleThreshold) {
+          if (!voiceRunStartedAtRef.current) voiceRunStartedAtRef.current = now;
+          lastAudibleAtRef.current = now;
+          window.clearTimeout(clarityTimerRef.current);
+          clarityTimerRef.current = null;
+
+          const sustainedVoice = now - voiceRunStartedAtRef.current >= 350;
+          if (sustainedVoice && !answerVoiceStartedAtRef.current) {
+            answerVoiceStartedAtRef.current = Date.now();
+            window.clearTimeout(responseTimerRef.current);
+            window.clearTimeout(voiceHintTimerRef.current);
+            responseTimerRef.current = null;
+            voiceHintTimerRef.current = null;
+            setNotice("Voice detected. Listening to your answer...");
+          }
+
+          if (sustainedVoice && statusRef.current === "interviewer-speaking" && now - lastInterruptionAtRef.current > 2200) {
+            lastInterruptionAtRef.current = now;
+            stopOutput();
+            setStatus("listening");
+            setNotice("You interrupted the interviewer. Listening to you now.");
+          }
+        } else {
+          voiceRunStartedAtRef.current = 0;
+          const answerStartedAt = answerVoiceStartedAtRef.current;
+          const quietFor = lastAudibleAtRef.current ? now - lastAudibleAtRef.current : 0;
+          if (answerStartedAt && quietFor > 1400 && !clarityTimerRef.current) {
+            clarityTimerRef.current = window.setTimeout(() => {
+              clarityTimerRef.current = null;
+              if (!sessionRef.current || lastCandidateTranscriptAtRef.current >= answerStartedAt) return;
+              answerVoiceStartedAtRef.current = 0;
+              setNotice("I heard audio but could not understand it clearly. Please repeat closer to the microphone.");
+              sessionRef.current.sendClientContent({
+                turns: "[SESSION EVENT] Voice activity was detected, but no usable transcription arrived. Briefly say the audio was unclear and ask the candidate to repeat the answer more clearly.",
+                turnComplete: true,
+              });
+            }, 2400);
+          }
         }
         const pcm = downsampleToPcm16(input, inputContext.sampleRate);
         sessionRef.current.sendRealtimeInput({
@@ -353,19 +449,21 @@ export default function useGeminiLiveInterview(config) {
       setError(message);
       throw startError;
     }
-  }, [addTranscript, clearVoiceTimers, close, config, flushTranscript, playPcm, scheduleNoAnswerPrompt, speakerEnabled, status, stopOutput]);
+  }, [addTranscript, clearVoiceTimers, close, config, flushTranscript, playPcm, scheduleModelResponseWatchdog, scheduleNoAnswerPrompt, speakerEnabled, status, stopOutput]);
 
   const setMicEnabled = useCallback((enabled) => {
     streamRef.current?.getAudioTracks().forEach((track) => { track.enabled = enabled; });
     if (!enabled) {
+      clearVoiceTimers();
       sessionRef.current?.sendRealtimeInput?.({ audioStreamEnd: true });
       setInputLevel(0);
-      setNotice("Microphone muted.");
+      setNotice("Microphone muted. Unmute when you are ready to answer.");
     } else {
-      setNotice("Microphone is live.");
+      setNotice("Microphone is live. You can continue speaking.");
+      scheduleNoAnswerPrompt();
     }
     setMicEnabledState(enabled);
-  }, []);
+  }, [clearVoiceTimers, scheduleNoAnswerPrompt]);
 
   const setCameraEnabled = useCallback((enabled) => {
     streamRef.current?.getVideoTracks().forEach((track) => { track.enabled = enabled; });

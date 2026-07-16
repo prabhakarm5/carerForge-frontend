@@ -54,18 +54,26 @@
   border-radius: 7px;
   color: #041417;
   background: #22d3ee;
+  flex-shrink: 0;
 }
 
 .recharge-header h2 {
   margin: 0;
   font-size: 16px;
   letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .recharge-header p {
   margin: 3px 0 0;
   color: #94a3b8;
   font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .recharge-close {
@@ -78,6 +86,7 @@
   color: #94a3b8;
   background: transparent;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .recharge-close:hover {
@@ -92,6 +101,7 @@
   overscroll-behavior: contain;
   padding: 16px 18px 18px;
   scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 
 .recharge-plan-grid {
@@ -124,6 +134,11 @@
   background: #111a28;
 }
 
+.recharge-plan-card:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: 2px;
+}
+
 .recharge-plan-card:disabled {
   cursor: not-allowed;
   opacity: 0.68;
@@ -144,6 +159,7 @@
   font-size: 8px;
   font-weight: 850;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .recharge-plan-card.is-current .recharge-plan-label { color: #34d399; }
@@ -153,13 +169,30 @@
 .recharge-tone-cyan .recharge-plan-icon { color: #22d3ee; background: rgba(34, 211, 238, 0.12); }
 .recharge-tone-emerald .recharge-plan-icon { color: #34d399; background: rgba(52, 211, 153, 0.12); }
 .recharge-plan-card > strong { overflow: hidden; margin-bottom: 8px; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.recharge-token-count { display: inline-flex; align-items: center; gap: 4px; width: fit-content; color: #a5b4fc; font-size: 9px; font-weight: 750; }
-.recharge-price { align-self: end; margin-top: 13px; font-size: 18px; font-weight: 850; }
+.recharge-token-count { display: inline-flex; align-items: center; gap: 4px; width: fit-content; max-width: 100%; color: #a5b4fc; font-size: 9px; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recharge-price { align-self: end; margin-top: 13px; font-size: 18px; font-weight: 850; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recharge-price small { color: #64748b; font-size: 9px; font-weight: 500; }
 .recharge-plan-arrow { position: absolute; right: 10px; bottom: 12px; color: #64748b; }
 .recharge-processing { display: inline-flex; align-items: center; gap: 4px; margin-top: 5px; color: #22d3ee; font-size: 9px; }
 .recharge-processing svg,
 .recharge-spin { animation: recharge-spin 0.8s linear infinite; }
+
+/* Skeleton loading state — mirrors the real card layout so there is no
+   layout shift once data arrives, which makes the modal feel instant. */
+.recharge-skeleton { cursor: default; pointer-events: none; }
+.recharge-skel-icon { width: 31px; height: 31px; margin-bottom: 9px; border-radius: 6px; background: rgba(148, 163, 184, 0.12); }
+.recharge-skel-line { display: block; height: 11px; margin-bottom: 8px; border-radius: 4px; background: rgba(148, 163, 184, 0.12); }
+.recharge-skel-icon,
+.recharge-skel-line { position: relative; overflow: hidden; }
+.recharge-skel-icon::after,
+.recharge-skel-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.16), transparent);
+  animation: recharge-shimmer 1.3s ease-in-out infinite;
+}
 
 .recharge-state {
   display: grid;
@@ -189,6 +222,7 @@
   padding-top: 13px;
   border-top: 1px solid rgba(148, 163, 184, 0.1);
   color: #34d399;
+  flex-shrink: 0;
 }
 
 .recharge-footer p { margin: 0; color: #64748b; font-size: 10px; line-height: 1.55; }
@@ -196,7 +230,39 @@
 @keyframes recharge-fade { from { opacity: 0; } }
 @keyframes recharge-enter { from { opacity: 0; transform: translateY(10px); } }
 @keyframes recharge-spin { to { transform: rotate(360deg); } }
+@keyframes recharge-shimmer { to { transform: translateX(100%); } }
 
+/* ---------- Responsive breakpoints: large desktop down to tiny phones ---------- */
+
+/* Large desktop / wide monitors */
+@media (min-width: 1400px) {
+  .recharge-dialog { width: min(720px, 92vw); }
+  .recharge-plan-card { min-height: 172px; padding: 15px; }
+  .recharge-price { font-size: 19px; }
+}
+
+/* Standard desktop / laptop (default sizing already targets this) */
+@media (min-width: 1025px) and (max-width: 1399px) {
+  .recharge-dialog { width: min(640px, 90vw); }
+}
+
+/* Small laptops / large tablets landscape */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .recharge-overlay { padding: 20px; }
+  .recharge-dialog { width: min(600px, 94vw); }
+  .recharge-plan-grid { gap: 8px; }
+}
+
+/* Tablets portrait */
+@media (min-width: 641px) and (max-width: 768px) {
+  .recharge-overlay { padding: 14px; }
+  .recharge-dialog { width: 100%; max-height: min(88dvh, var(--app-height, 100dvh)); }
+  .recharge-claim-box { grid-template-columns: 1fr; }
+  .recharge-claim-box form { width: 100%; }
+  .recharge-plan-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Phones (large to small) — bottom-sheet style */
 @media (max-width: 640px) {
   .recharge-overlay { place-items: end center; padding: 0; }
   .recharge-dialog { width: 100%; max-height: min(92dvh, var(--app-height, 100dvh)); border-right: 0; border-bottom: 0; border-left: 0; border-radius: 8px 8px 0 0; }
@@ -205,19 +271,59 @@
   .recharge-content { padding: 12px 12px max(14px, env(safe-area-inset-bottom)); }
   .recharge-plan-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
   .recharge-plan-card { min-height: 142px; padding: 11px; }
+  .recharge-claim-box { grid-template-columns: 1fr; }
+  .recharge-claim-box form { width: 100%; }
 }
 
+/* Small phones (e.g. iPhone SE, older Android) */
+@media (max-width: 400px) {
+  .recharge-header { padding: 11px 11px 9px; gap: 9px; }
+  .recharge-header h2 { font-size: 14.5px; }
+  .recharge-header p { font-size: 10px; }
+  .recharge-plan-card { min-height: 132px; padding: 10px; }
+  .recharge-price { font-size: 16px; }
+  .recharge-token-count { font-size: 8.5px; }
+}
+
+/* Very small / narrow phones — single column */
 @media (max-width: 360px) {
   .recharge-plan-grid { grid-template-columns: 1fr; }
-  .recharge-plan-card { min-height: 126px; }
+  .recharge-plan-card { min-height: 118px; grid-template-columns: 40px 1fr; grid-template-rows: auto auto; column-gap: 10px; row-gap: 4px; align-items: center; }
+  .recharge-plan-icon { margin-bottom: 0; grid-row: 1 / 3; }
+  .recharge-plan-card > strong { grid-column: 2; margin-bottom: 0; }
+  .recharge-token-count { grid-column: 2; }
+  .recharge-price { grid-column: 1 / -1; margin-top: 6px; align-self: auto; }
+  .recharge-plan-arrow { bottom: 10px; right: 10px; }
+}
+
+/* Foldables / ultra-narrow (e.g. Galaxy Fold cover screen) */
+@media (max-width: 280px) {
+  .recharge-overlay { padding: 0; }
+  .recharge-content { padding: 10px 10px max(12px, env(safe-area-inset-bottom)); }
+  .recharge-header { grid-template-columns: 30px minmax(0, 1fr) 28px; }
+  .recharge-header-icon { width: 30px; height: 30px; }
+  .recharge-claim-box form { grid-template-columns: 1fr 50px; }
+}
+
+/* Short viewports (landscape phones, small laptops with taskbars) */
+@media (max-height: 560px) {
+  .recharge-overlay { align-items: center; }
+  .recharge-dialog { max-height: min(94dvh, var(--app-height, 100dvh)); }
+  .recharge-header { padding: 10px 14px; }
+  .recharge-content { padding: 10px 14px 14px; }
+  .recharge-plan-card { min-height: 0; padding: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .recharge-backdrop,
-  .recharge-dialog,
+  .recharge-dialog { animation-duration: 0.01ms !important; }
   .recharge-processing svg,
-  .recharge-spin { animation-duration: 0.01ms !important; }
+  .recharge-spin { animation: recharge-spin 0.8s linear infinite !important; }
+  .recharge-skel-icon::after,
+  .recharge-skel-line::after { animation: none; }
 }
+
+/* ---------- Offers / promo claim UI ---------- */
 
 .recharge-offers { margin-bottom: 12px; padding: 10px; border: 1px solid rgba(251,191,36,.24); border-radius: 7px; background: rgba(251,191,36,.055); }
 .recharge-offers-title { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; color: #fcd34d; font-size: 10px; font-weight: 800; }
@@ -228,17 +334,18 @@
 .recharge-offer strong { font: 800 10px ui-monospace,monospace; }
 .recharge-offer small { margin-top: 3px; color: #9c8b63; font-size: 8px; }
 @media (max-width: 540px) { .recharge-offer-list { grid-template-columns: 1fr; } }
-/* Claim-first promo flow */
-.recharge-claim-box { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, .85fr); align-items: center; gap: 12px; margin-bottom: 12px; padding: 11px; border: 1px solid rgba(34,211,238,.2); border-radius: 7px; background: rgba(34,211,238,.045); }
-.recharge-claim-box > div { display: flex; align-items: center; gap: 8px; color: #67e8f9; }
+
+.recharge-claim-box { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, .85fr); align-items: center; gap: 12px; margin-bottom: 12px; padding: 11px; border: 1px solid rgba(34,211,238,.2); border-radius: 7px; background: rgba(34,211,238,.045); }
+.recharge-claim-box > div { display: flex; align-items: center; gap: 8px; color: #67e8f9; min-width: 0; }
 .recharge-claim-box > div span, .recharge-claim-box strong, .recharge-claim-box small { display: block; }
-.recharge-claim-box strong { color: #e6fbff; font-size: 10px; }
-.recharge-claim-box small { margin-top: 2px; color: #71879b; font-size: 8px; }
+.recharge-claim-box strong { color: #e6fbff; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recharge-claim-box small { margin-top: 2px; color: #71879b; font-size: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recharge-claim-box form { height: 34px; display: grid; grid-template-columns: minmax(0, 1fr) 60px; border: 1px solid #294052; border-radius: 5px; overflow: hidden; background: #071019; }
 .recharge-claim-box input { min-width: 0; border: 0; outline: 0; padding: 0 10px; color: #e8faff; background: transparent; font: 800 10px ui-monospace, monospace; letter-spacing: 0; }
 .recharge-claim-box input::placeholder { color: #516677; }
 .recharge-claim-box form button { border: 0; color: #031114; background: #22d3ee; font-size: 9px; font-weight: 850; cursor: pointer; }
 .recharge-claim-box form button:disabled { cursor: not-allowed; opacity: .55; }
+
 .recharge-offer { cursor: default; }
 .recharge-offer.selected { border-style: solid; border-color: rgba(52,211,153,.5); background: rgba(52,211,153,.06); }
 .recharge-offer > div { min-width: 0; }
@@ -246,10 +353,11 @@
 .recharge-offer em { margin-top: 4px; color: #6f7e8d; font-size: 7px; font-style: normal; text-transform: uppercase; }
 .recharge-offer > button { min-width: 54px; height: 27px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; border: 1px solid rgba(251,191,36,.34); border-radius: 4px; color: #fcd34d; background: rgba(251,191,36,.08); font-size: 8px; font-weight: 850; cursor: pointer; }
 .recharge-offer > button:disabled { color: #657384; border-color: #263442; background: transparent; cursor: default; }
+
 .recharge-applied { display: grid; grid-template-columns: 20px minmax(0, 1fr) 28px; align-items: center; gap: 7px; margin: 0 0 12px; padding: 9px 10px; border: 1px solid rgba(52,211,153,.28); border-radius: 6px; color: #6ee7b7; background: rgba(52,211,153,.055); }
 .recharge-applied span, .recharge-applied strong, .recharge-applied small { display: block; }
-.recharge-applied strong { font-size: 9px; }
-.recharge-applied small { margin-top: 2px; color: #6f8d85; font-size: 8px; }
+.recharge-applied strong { font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recharge-applied small { margin-top: 2px; color: #6f8d85; font-size: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recharge-applied > button { width: 28px; height: 28px; display: grid; place-items: center; border: 0; color: #78938b; background: transparent; cursor: pointer; }
+
 .recharge-price small del { margin-right: 3px; color: #7d8794; }
-@media (max-width: 540px) { .recharge-claim-box { grid-template-columns: 1fr; } .recharge-claim-box form { width: 100%; } }

@@ -6,7 +6,7 @@ import {
   Image as ImageIcon, FileText,
   Zap, Globe, BookOpen, AlertTriangle, X,
   Maximize2, Download, ChevronDown,
-  Eye, EyeOff, ThumbsUp, ThumbsDown, Volume2,
+  Eye, EyeOff, LockKeyhole, ThumbsUp, ThumbsDown, Volume2,
 } from "lucide-react";
 import { getConversation, getConversationStatus, getModels } from "../../services/conversationService";
 import { handleApiError } from "../../utils/errorHandler";
@@ -431,7 +431,7 @@ function RenderedMessage({ content, onOpenPanel, isStreaming = false }) {
   // the instant streaming ends (delayMs becomes 0 → immediate).
   const normalizedContent = useMemo(() => normalizeMessageMarkup(content), [content]);
   const throttledContent = useThrottledValue(normalizedContent, isStreaming ? 140 : 0);
-  const blocks = useMemo(() => parseContent(throttledContent), [throttledContent]);
+  const blocks = useMemo(() => parseContent(throttledContent, { deferDataUriDecode: isStreaming }), [isStreaming, throttledContent]);
   let listBuffer = [];
   let listType = null;
 
@@ -708,6 +708,7 @@ function ModelSwitchToast({ message }) {
 const BANNER_CFG = {
   GROQ_BUSY:  { icon: AlertTriangle, iconColor: "#fbbf24", bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.2)", title: "🤖 The AI is a bit busy",  desc: "The service is under high load right now. Please wait a moment and try again.", cta: null },
   RATE_LIMIT: { icon: AlertTriangle, iconColor: "#fbbf24", bg: "rgba(245,158,11,0.08)", border: "rgba(245,158,11,0.2)", title: "🐢 Slow down a little",     desc: "You're sending messages too quickly. Please wait a few seconds.",              cta: null },
+  MODEL_LOCKED: { icon: LockKeyhole, iconColor: "#fbbf24", bg: "rgba(251,191,36,0.08)", border: "rgba(251,191,36,0.2)", title: "Recharge required", desc: "This premium model unlocks after a recharge and locks again when credits run out.", cta: "View plans" },
   NO_TOKENS:  { icon: Zap,           iconColor: "#f87171", bg: "rgba(239,68,68,0.08)",  border: "rgba(239,68,68,0.2)",  title: "🪙 You're out of tokens",   desc: "You've used all your available tokens. Recharge to keep chatting.",            cta: "Recharge Now" },
   GENERAL:    { icon: AlertTriangle, iconColor: "#f87171", bg: "rgba(239,68,68,0.08)",  border: "rgba(239,68,68,0.2)",  title: "⚠️ Something went wrong",   desc: "Please try sending your message again.",                                        cta: null },
 };
@@ -881,16 +882,16 @@ function ModelAvatar({ label, size = 26 }) {
   );
 }
 
-function ModelRow({ m, active, onSelect }) {
+function ModelRow({ m, active, onSelect, onLocked }) {
   return (
     <button
-      onClick={() => onSelect(m.id)}
+      onClick={() => m.locked ? onLocked(m) : onSelect(m.id)}
       style={{
         width: "100%", textAlign: "left", padding: "8px 9px",
-        borderRadius: 10, border: "none", cursor: "pointer",
+        borderRadius: 10, border: "none", cursor: m.locked ? "not-allowed" : "pointer",
         background: active ? "rgba(124,58,237,0.16)" : "transparent",
         display: "flex", alignItems: "center", gap: 9,
-        fontFamily: "inherit", transition: "background-color 0.12s",
+        fontFamily: "inherit", transition: "background-color 0.12s", opacity: m.locked ? 0.58 : 1,
       }}
       onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
       onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
@@ -910,7 +911,11 @@ function ModelRow({ m, active, onSelect }) {
               <EyeOff size={9} /> TEXT
             </span>
           )}
-          {active && <Check size={13} color="#a78bfa" style={{ flexShrink: 0 }} />}
+          {m.locked && (
+            <span title={m.lockedReason || "Recharge required"} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 9.5, fontWeight: 700, color: "#fbbf24", background: "rgba(251,191,36,0.1)", padding: "1px 6px", borderRadius: 6, flexShrink: 0 }}>
+              <LockKeyhole size={9} /> LOCKED
+            </span>
+          )}          {active && <Check size={13} color="#a78bfa" style={{ flexShrink: 0 }} />}
         </div>
         {m.description && (
           <span style={{ fontSize: 10.5, color: "#64748b", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{m.description}</span>
@@ -920,7 +925,7 @@ function ModelRow({ m, active, onSelect }) {
   );
 }
 
-function ModelSelector({ models, selectedId, onSelect, disabled }) {
+function ModelSelector({ models, selectedId, onSelect, onLocked, disabled }) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const ref = useRef(null);
@@ -1003,7 +1008,7 @@ function ModelSelector({ models, selectedId, onSelect, disabled }) {
             }}
           >
             {visibleModels.map(m => (
-              <ModelRow key={m.id} m={m} active={m.id === selectedId} onSelect={(id) => { onSelect(id); setOpen(false); }} />
+              <ModelRow key={m.id} m={m} active={m.id === selectedId} onLocked={(model) => { onLocked(model); setOpen(false); }} onSelect={(id) => { onSelect(id); setOpen(false); }} />
             ))}
 
             {hasMore && (
@@ -1066,7 +1071,7 @@ export default function ChatPage() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    if (modelsFetchedThisSession) return;
+    if (modelsFetchedThisSession && models.length) return;
     modelsFetchedThisSession = true;
     getModels()
       .then((list) => {
@@ -1074,8 +1079,8 @@ export default function ChatPage() {
         setModels(list);
         saveCachedModels(list);
         setSelectedModelId((prev) => {
-          if (prev && list.some(m => m.id === prev)) return prev;
-          return list[0]?.id || "";
+          if (prev && list.some(m => m.id === prev && !m.locked)) return prev;
+          return list.find((model) => !model.locked)?.id || list[0]?.id || "";
         });
       })
       .catch(() => { modelsFetchedThisSession = false; }); // allow retry next mount on failure
@@ -1097,6 +1102,19 @@ export default function ChatPage() {
     reader.readAsDataURL(file);
     e.target.value = "";
   }
+
+  const refreshModelAccess = useCallback(async () => {
+    try {
+      const list = await getModels(true);
+      setModels(list || []);
+      saveCachedModels(list || []);
+      setSelectedModelId((current) => list?.some((model) => model.id === current && !model.locked)
+        ? current
+        : list?.find((model) => !model.locked)?.id || "");
+    } catch {
+      // Wallet refresh still succeeds if the catalog is temporarily unavailable.
+    }
+  }, []);
 
   const [tempKey] = useState(() => "new-" + Date.now());
   const [activeKey, setActiveKey] = useState(() => id || tempKey);
@@ -1123,6 +1141,8 @@ export default function ChatPage() {
   const isAtBottomRef = useRef(true);
   const followOutputRef = useRef(true);
   const committedRef = useRef(new Set());
+  const latestQuestionRef = useRef(null);
+  const pendingQuestionScrollRef = useRef(false);
 
   const isStreamingHere = !!liveStream && !liveStream.done;
   const isWaiting        = !!liveStream && liveStream.waiting && !liveStream.text;
@@ -1187,6 +1207,21 @@ export default function ChatPage() {
   }, [id]);
 
   useEffect(() => {
+    if (!pendingQuestionScrollRef.current || !latestQuestionRef.current || !scrollRef.current) return;
+    const frame = requestAnimationFrame(() => {
+      const container = scrollRef.current;
+      const question = latestQuestionRef.current;
+      if (!container || !question) return;
+      const top = question.getBoundingClientRect().top
+        - container.getBoundingClientRect().top
+        + container.scrollTop
+        - 12;
+      container.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      pendingQuestionScrollRef.current = false;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [messages.length, isWaiting]);
+  useEffect(() => {
     if (!liveStream?.text || !followOutputRef.current) return;
     const frame = requestAnimationFrame(() => {
       const el = scrollRef.current;
@@ -1195,29 +1230,69 @@ export default function ChatPage() {
     return () => cancelAnimationFrame(frame);
   }, [liveStream?.text]);
 
-  useEffect(() => {
+useEffect(() => {
     if (!liveStream || !liveStream.done) return;
     if (committedRef.current.has(liveStream.streamId)) return;
     committedRef.current.add(liveStream.streamId);
 
+    const conversationId = liveStream.donePayload?.conversationId || id;
     if (liveStream.text) {
-      setMessages(prev => {
-        const next = [...prev, { role: "ASSISTANT", content: liveStream.text }];
-        saveCachedConversation(id, next);
+      setMessages((previous) => {
+        const last = previous[previous.length - 1];
+        const alreadyCommitted = last
+          && (last.role === "ASSISTANT" || last.role === "assistant")
+          && last.content === liveStream.text;
+        const next = alreadyCommitted
+          ? previous
+          : [...previous, { role: "ASSISTANT", content: liveStream.text }];
+        saveCachedConversation(conversationId, next);
         return next;
       });
     }
+
     if (liveStream.donePayload && setWallet && liveStream.donePayload.remainingTokens != null) {
-      setWallet(prev => ({ ...prev, remainingTokens: liveStream.donePayload.remainingTokens }));
+      const remainingTokens = Number(liveStream.donePayload.remainingTokens);
+      setWallet((previous) => ({ ...previous, remainingTokens }));
+      if (remainingTokens <= 0) {
+        setModels((current) => {
+          const next = current.map((model) => model.premium
+            ? { ...model, locked: true, lockedReason: "Add credits to use this model" }
+            : model);
+          saveCachedModels(next);
+          return next;
+        });
+      }
     }
-    if (liveStream.donePayload?.tokensExhausted) {
-      setRechargeOpen(true);
-    }
-    const t2 = setTimeout(() => {
+    if (liveStream.donePayload?.tokensExhausted) setRechargeOpen(true);
+
+    const reconcileTimer = window.setTimeout(async () => {
+      if (!conversationId) return;
+      try {
+        const data = await getConversation(conversationId, true);
+        const serverMessages = Array.isArray(data?.messages) ? data.messages : [];
+        if (!serverMessages.length) return;
+        setMessages((current) => {
+          const lastAssistant = (items) => [...items].reverse().find((message) => message.role === "ASSISTANT" || message.role === "assistant");
+          const serverAnswer = lastAssistant(serverMessages)?.content || "";
+          const localAnswer = lastAssistant(current)?.content || "";
+          const serverIsMoreComplete = serverMessages.length > current.length || serverAnswer.length > localAnswer.length;
+          if (!serverIsMoreComplete) return current;
+          saveCachedConversation(conversationId, serverMessages);
+          return serverMessages;
+        });
+      } catch {
+        // The streamed text remains visible even if reconciliation is temporarily unavailable.
+      }
+    }, 300);
+
+    const clearTimer = window.setTimeout(() => {
       clearStream(streamKey);
-      setActiveKey(id || tempKey);
-    }, 50);
-    return () => clearTimeout(t2);
+      setActiveKey(conversationId || tempKey);
+    }, 700);
+    return () => {
+      window.clearTimeout(reconcileTimer);
+      window.clearTimeout(clearTimer);
+    };
   }, [liveStream, streamKey, setWallet, clearStream, id, tempKey]);
 
   useEffect(() => {
@@ -1225,7 +1300,7 @@ export default function ChatPage() {
     const code = liveStream.error.code;
     const hasText = !!liveStream.text;
 
-    if (code === "NO_TOKENS") {
+    if (code === "NO_TOKENS" || code === "MODEL_LOCKED") {
       setErrorBanner(code);
       setRechargeOpen(true);
       return;
@@ -1347,6 +1422,11 @@ export default function ChatPage() {
   }
 
   const handleSend = useCallback((textOverride) => {
+    if (currentModel?.locked) {
+      setErrorBanner("MODEL_LOCKED");
+      setRechargeOpen(true);
+      return;
+    }
     const text = (textOverride ?? input).trim();
     const textFile = textOverride == null ? attachedText : null;
     if ((!text && !attachedImage && !textFile) || isBusy) return;
@@ -1356,6 +1436,7 @@ export default function ChatPage() {
       : text;
 
     setErrorBanner(null);
+    pendingQuestionScrollRef.current = true;
     followOutputRef.current = true;
     isAtBottomRef.current = true;
     setMessages(prev => [...prev, {
@@ -1392,7 +1473,7 @@ export default function ChatPage() {
       },
       onError: () => {},
     });
-  }, [id, input, isBusy, tempKey, startStream, navigate, attachedImage, attachedText, selectedModelId, modelSupportsVision]);
+  }, [id, input, isBusy, tempKey, startStream, navigate, attachedImage, attachedText, selectedModelId, modelSupportsVision, currentModel?.locked]);
   const handleRetry = useCallback((messageIndex) => {
     if (isBusy) return;
     for (let previous = messageIndex - 1; previous >= 0; previous -= 1) {
@@ -1545,7 +1626,7 @@ export default function ChatPage() {
             {!loadingHistory && !historyError && (
               <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? 14 : 32 }}>
                 {messages.map((msg, i) => (
-                  <div key={i} className="msg-block">
+                  <div key={i} ref={i === messages.length - 1 && (msg.role === "USER" || msg.role === "user") ? latestQuestionRef : undefined} className="msg-block">
                     <MessageRow
                       role={msg.role}
                       content={msg.content}
@@ -1649,6 +1730,7 @@ export default function ChatPage() {
                   models={models}
                   selectedId={selectedModelId}
                   onSelect={setSelectedModelId}
+                  onLocked={() => { setErrorBanner("MODEL_LOCKED"); setRechargeOpen(true); }}
                   disabled={isBusy}
                   compact={isMobile}
                 />
@@ -1672,7 +1754,7 @@ export default function ChatPage() {
         open={rechargeOpen}
         reason="tokens"
         onClose={() => setRechargeOpen(false)}
-        onActivated={() => getWallet().then(setWallet).catch(() => {})}
+        onActivated={() => Promise.all([getWallet().then(setWallet), refreshModelAccess()]).catch(() => {})}
       />
     </div>
   );

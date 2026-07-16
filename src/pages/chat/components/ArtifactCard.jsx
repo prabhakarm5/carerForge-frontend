@@ -3,6 +3,7 @@ import "./ArtifactCard.css";
 
 export default function ArtifactCard({ artifact, onOpenPanel, onDownload, isStreaming }) {
   const status = isStreaming ? "building" : artifact.complete ? "ready" : "incomplete";
+  const canOpen = Boolean(artifact.content);
 
   return (
     <section className="chat-artifact-card" aria-label="Generated HTML artifact">
@@ -13,7 +14,7 @@ export default function ArtifactCard({ artifact, onOpenPanel, onDownload, isStre
           <div className="chat-artifact-meta">
             <span>Interactive HTML</span>
             <span className={`is-${status}`}>
-              {status === "building" && <LoaderCircle size={11} />}
+              {status === "building" && <LoaderCircle className="animate-spin" size={11} />}
               {status === "building" ? "Building" : status === "ready" ? "Ready" : "Incomplete"}
             </span>
           </div>
@@ -25,7 +26,8 @@ export default function ArtifactCard({ artifact, onOpenPanel, onDownload, isStre
         <button
           type="button"
           className="chat-artifact-open"
-          onClick={() => onOpenPanel?.({
+          disabled={!canOpen}
+          onClick={() => canOpen && onOpenPanel?.({
             kind: "artifact",
             lang: "html",
             content: artifact.content,
@@ -38,7 +40,8 @@ export default function ArtifactCard({ artifact, onOpenPanel, onDownload, isStre
         <button
           type="button"
           className="chat-artifact-download"
-          onClick={() => onDownload?.(artifact.content, artifact.lang, artifact.label)}
+          disabled={!canOpen}
+          onClick={() => canOpen && onDownload?.(artifact.content, artifact.lang, artifact.label)}
           title="Download HTML"
           aria-label="Download HTML"
         >

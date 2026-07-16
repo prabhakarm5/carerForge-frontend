@@ -78,6 +78,7 @@ export const API = {
     GET_PROFILE: "/api/admin/me",
     UPDATE_PROFILE: "/api/admin/me",
     MONITORING: "/api/admin/monitoring/overview",
+    REQUEST_LOGS: "/api/admin/monitoring/requests",
     SYSTEM_STATUS: "/api/admin/system/status",
     GET_ALL_USERS: "/api/admin/users",
 
@@ -153,6 +154,7 @@ export const API = {
   // ================= IMAGES =================
   IMAGES: {
     GENERATE: "/api/images/generate",
+    MODELS: "/api/images/models",
     HISTORY: "/api/images/history",
 
     DELETE: (id) => `/api/images/${id}`,

@@ -293,7 +293,7 @@ function LoginForm() {
             if (response.role === "ROLE_ADMIN") {
                 navigate("/admin/dashboard");
             } else {
-                navigate("/dashboard");
+                navigate("/welcome");
             }
         } catch (error) {
             const response = error.response?.data;

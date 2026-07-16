@@ -157,7 +157,7 @@ export default function PaymentFailedPage() {
             <RotateCcw size={16} /> Try Again
           </button>
           <button
-            onClick={() => navigate("/support?new=1&orderId=" + encodeURIComponent(orderId || "") + "&reason=" + encodeURIComponent(reason || "Payment failed after checkout"))}
+            onClick={() => navigate("/settings?tab=support&new=1&orderId=" + encodeURIComponent(orderId || "") + "&reason=" + encodeURIComponent(reason || "Payment failed after checkout"))}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               width: "100%", padding: "13px", borderRadius: 14,

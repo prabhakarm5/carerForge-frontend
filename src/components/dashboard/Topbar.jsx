@@ -16,6 +16,21 @@ const MENU_BG    = "linear-gradient(160deg,#24242e,#18181f)";
 const ACCENT_LT  = "#a78bfa";
 const EASE       = "cubic-bezier(0.22, 1, 0.36, 1)";
 
+/* ─── Wallet auto-refresh ────────────────────────────────────────────
+   Fire this custom event from ANYWHERE in the app right after an action
+   that changes the user's token balance (chat message sent, image
+   generated, plan purchased, etc.) to get an INSTANT badge update
+   instead of waiting for the next poll tick:
+
+     import { WALLET_REFRESH_EVENT } from ".../Topbar";
+     window.dispatchEvent(new Event(WALLET_REFRESH_EVENT));
+
+   This mirrors the same pattern already used for WORKSPACE_CONTEXT_EVENT
+   in this codebase.
+──────────────────────────────────────────────────────────────────── */
+export const WALLET_REFRESH_EVENT = "wallet:refresh";
+const DEFAULT_WALLET_POLL_MS = 30000; // 30s — tune to your API's rate limits
+
 function getPlanStyle(planRaw) {
   const hasPlan = planRaw != null && String(planRaw).trim() !== "";
   const label = hasPlan ? String(planRaw).trim() : "Free";
@@ -93,15 +108,36 @@ function IBtn({ onClick, children, style = {}, className = "" }) {
 }
 
 function TokenBadge({ wallet }) {
+  const [pulse, setPulse] = useState(false);
+  const prevTokensRef = useRef(wallet?.remainingTokens);
+
+  // Whenever the token count actually changes (thanks to the auto-refresh
+  // polling below), briefly pulse the badge so the update feels alive
+  // instead of the number just silently jumping.
+  useEffect(() => {
+    const prev = prevTokensRef.current;
+    const next = wallet?.remainingTokens;
+    if (prev !== undefined && next !== undefined && prev !== next) {
+      setPulse(true);
+      const t = setTimeout(() => setPulse(false), 650);
+      prevTokensRef.current = next;
+      return () => clearTimeout(t);
+    }
+    prevTokensRef.current = next;
+  }, [wallet?.remainingTokens]);
+
   if (!wallet) return null;
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 4,
-      background: "linear-gradient(145deg, rgba(124,58,237,0.22), rgba(124,58,237,0.08))",
-      border: "1px solid rgba(124,58,237,0.35)",
-      boxShadow: "0 1px 3px rgba(124,58,237,0.35), inset 0 1px 0 rgba(255,255,255,0.08)",
-      borderRadius: 99, padding: "3px 9px 3px 6px", cursor: "default", flexShrink: 0,
-    }}>
+    <div
+      className={pulse ? "tb-token-badge pulse" : "tb-token-badge"}
+      style={{
+        display: "flex", alignItems: "center", gap: 4,
+        background: "linear-gradient(145deg, rgba(124,58,237,0.22), rgba(124,58,237,0.08))",
+        border: "1px solid rgba(124,58,237,0.35)",
+        boxShadow: "0 1px 3px rgba(124,58,237,0.35), inset 0 1px 0 rgba(255,255,255,0.08)",
+        borderRadius: 99, padding: "3px 9px 3px 6px", cursor: "default", flexShrink: 0,
+      }}
+    >
       <Zap size={10} color={ACCENT_LT} style={{ flexShrink: 0 }} />
       <span style={{ fontSize: 11, fontWeight: 700, color: "#c4b5fd", fontVariantNumeric: "tabular-nums", letterSpacing: "0.01em" }}>
         {wallet.remainingTokens ?? 0}
@@ -115,7 +151,6 @@ function ProfileDropdown({ user, wallet, open, onClose }) {
   const [visible, setVisible] = useState(false);
   const [panel, setPanel] = useState("menu");
   const [loggingOut, setLoggingOut] = useState(null);
-  const dropRef = useRef(null);
 
   const navigate = useNavigate();
   const logoutCurrentDevice = useAuthStore((s) => s.logoutCurrentDevice);
@@ -133,13 +168,11 @@ function ProfileDropdown({ user, wallet, open, onClose }) {
     return () => clearTimeout(t);
   }, [open]);
 
-  useEffect(() => {
-    function handler(e) {
-      if (dropRef.current && !dropRef.current.contains(e.target)) onClose();
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
+  // NOTE: outside-click / outside-tap-to-close is handled one level up in
+  // <Topbar> (see `avatarWrapRef`), not here. Doing it here as well used to
+  // cause a "close then instantly reopen" bug on touch devices, because
+  // touchstart would close the menu and the click right after it would
+  // toggle it back open. Keeping a single source of truth fixes that.
 
   const doLogoutThis = useCallback(async () => {
     setLoggingOut("this");
@@ -157,7 +190,6 @@ function ProfileDropdown({ user, wallet, open, onClose }) {
 
   return (
     <div
-      ref={dropRef}
       style={{
         position: "absolute", top: "calc(100% + 10px)", right: 0,
         zIndex: 100, width: "min(252px, calc(100vw - 24px))",
@@ -297,7 +329,7 @@ function ScopeBtn({ label, sub, onClick, busy, disabled, strong }) {
         <span style={{ fontSize: 12.5, fontWeight: 600 }}>{busy ? "Signing out..." : label}</span>
         {!busy && <span style={{ fontSize: 10.5, opacity: 0.6, fontWeight: 400 }}>{sub}</span>}
       </span>
-      {busy && <span className="tb-spinner" />}
+      {busy && <span className="tb-spinner cf-loading-spinner" />}
     </button>
   );
 }
@@ -323,12 +355,52 @@ function DropItem({ icon: Icon, label, onClick, danger = false }) {
 
 /* ══════════════════════════════════════════════════════════════════
    MAIN TOPBAR
+
+   New props (both optional — nothing breaks if you don't pass them):
+
+   - onRefreshWallet: async () => void
+       A function YOU provide that re-fetches the wallet/credits from
+       your API and updates whatever state feeds the `wallet` prop
+       (store, context, parent state — wherever it currently comes
+       from). Topbar does not fetch or own wallet data itself; it just
+       calls this on a smart schedule so the number you already render
+       via `wallet` stays fresh. Example (in the parent that renders
+       <Topbar />):
+
+         const refreshWallet = useCallback(async () => {
+           const res = await api.get("/wallet/me");
+           setWallet(res.data);   // whatever setter feeds the wallet prop
+         }, []);
+
+         <Topbar wallet={wallet} onRefreshWallet={refreshWallet} ... />
+
+   - walletPollIntervalMs: number (default 30000)
+       How often to poll while the tab is visible.
+
+   Efficiency behaviour (so it doesn't spam your API):
+   - Polling PAUSES completely while the tab is hidden/backgrounded.
+   - On tab focus / becoming visible again, it does one immediate
+     refresh to catch up, then resumes the normal interval.
+   - Overlapping calls are prevented (won't fire a new request while
+     one is still in flight).
+   - On repeated failures it backs off (1.6x per consecutive failure,
+     capped) instead of hammering a struggling API.
+   - Any part of the app can force an INSTANT refresh (e.g. right after
+     spending tokens) by dispatching WALLET_REFRESH_EVENT — see the
+     comment near the top of this file.
    ══════════════════════════════════════════════════════════════════ */
-export default function Topbar({ setSidebarOpen, wallet }) {
+export default function Topbar({ setSidebarOpen, wallet, onRefreshWallet, walletPollIntervalMs = DEFAULT_WALLET_POLL_MS }) {
   const user = useAuthStore((s) => s.user);
   const [showProfile, setShowProfile] = useState(false);
   const [workspaceContext, setWorkspaceContext] = useState(null);
   const location = useLocation();
+
+  // Wraps BOTH the avatar button and the dropdown panel. Outside-click /
+  // outside-tap detection checks against this single ref, so tapping the
+  // avatar icon itself is never treated as "outside" — it's exclusively
+  // handled by the button's own onClick toggle below. This is what makes
+  // the icon reliably open AND close on touch, not just open.
+  const avatarWrapRef = useRef(null);
 
   const pageName = location.pathname.startsWith("/chat") ? "Chat"
     : location.pathname.startsWith("/interview") ? "Interview"
@@ -338,6 +410,7 @@ export default function Topbar({ setSidebarOpen, wallet }) {
     : location.pathname.startsWith("/wallet") ? "Wallet"
     : location.pathname.startsWith("/profile") ? "Profile"
     : location.pathname.startsWith("/settings") ? "Settings"
+    : location.pathname.startsWith("/promos") ? "Rewards"
     : location.pathname.startsWith("/support") ? "Support"
     : "Dashboard";
 
@@ -357,6 +430,85 @@ export default function Topbar({ setSidebarOpen, wallet }) {
   }, []);
 
   const activeContext = workspaceContext?.kind === expectedContextKind ? workspaceContext : null;
+
+  /* ─── Touch-safe open/close for the avatar/profile menu ──────────── */
+  useEffect(() => {
+    function handleOutside(e) {
+      if (avatarWrapRef.current && !avatarWrapRef.current.contains(e.target)) {
+        setShowProfile(false);
+      }
+    }
+    // Both listeners: mousedown covers desktop/trackpad, touchstart covers
+    // mobile/tablet taps. { passive: true } keeps scroll performance intact.
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
+  }, []);
+
+  const toggleProfile = useCallback((e) => {
+    e.stopPropagation();
+    setShowProfile((v) => !v);
+  }, []);
+
+  /* ─── Efficient wallet auto-refresh (AJAX polling) ────────────────
+     See the JSDoc-style comment above the component for how to wire
+     `onRefreshWallet` from the parent. Everything below just decides
+     WHEN to call it, in a way that's kind to your API. */
+  useEffect(() => {
+    if (typeof onRefreshWallet !== "function") return; // nothing to do until wired up
+
+    let cancelled = false;
+    let timerId = null;
+    let inFlight = false;
+    let failCount = 0;
+
+    const runFetch = async () => {
+      if (inFlight || cancelled || document.hidden) return;
+      inFlight = true;
+      try {
+        await onRefreshWallet();
+        failCount = 0;
+      } catch (err) {
+        failCount = Math.min(failCount + 1, 5);
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[Topbar] wallet auto-refresh failed, backing off:", err);
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const scheduleNext = () => {
+      if (cancelled) return;
+      const backoffFactor = Math.pow(1.6, failCount); // gentle backoff on repeated errors
+      const delay = Math.min(walletPollIntervalMs * backoffFactor, walletPollIntervalMs * 8);
+      timerId = setTimeout(async () => {
+        await runFetch();
+        scheduleNext();
+      }, delay);
+    };
+
+    const catchUpIfVisible = () => {
+      if (!document.hidden) runFetch();
+    };
+
+    document.addEventListener("visibilitychange", catchUpIfVisible);
+    window.addEventListener("focus", catchUpIfVisible);
+    window.addEventListener(WALLET_REFRESH_EVENT, catchUpIfVisible);
+
+    scheduleNext();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timerId);
+      document.removeEventListener("visibilitychange", catchUpIfVisible);
+      window.removeEventListener("focus", catchUpIfVisible);
+      window.removeEventListener(WALLET_REFRESH_EVENT, catchUpIfVisible);
+    };
+  }, [onRefreshWallet, walletPollIntervalMs]);
 
   const headerStyle = {
     position: "sticky", top: 0, zIndex: 40, flexShrink: 0,
@@ -386,8 +538,21 @@ export default function Topbar({ setSidebarOpen, wallet }) {
         <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0, minWidth: 0 }}>
           <TokenBadge wallet={wallet} />
 
-          <div style={{ position: "relative" }}>
-            <div onClick={() => setShowProfile((v) => !v)} className="topbar-avatar-btn">
+          <div ref={avatarWrapRef} style={{ position: "relative" }}>
+            <div
+              onClick={toggleProfile}
+              className="topbar-avatar-btn"
+              role="button"
+              tabIndex={0}
+              aria-haspopup="menu"
+              aria-expanded={showProfile}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setShowProfile((v) => !v);
+                }
+              }}
+            >
               <Avatar user={user} size={26} />
             </div>
             <ProfileDropdown user={user} wallet={wallet} open={showProfile} onClose={() => setShowProfile(false)} />
@@ -398,13 +563,24 @@ export default function Topbar({ setSidebarOpen, wallet }) {
       <style>{`
         .topbar-ibtn:hover { background: linear-gradient(145deg, rgba(255,255,255,0.1), rgba(255,255,255,0.03)); color: ${TEXT}; }
         .topbar-ibtn:active { transform: translateY(1px) scale(0.96); }
-        .topbar-avatar-btn { cursor: pointer; transition: transform 150ms ${EASE}; }
+        .topbar-avatar-btn { cursor: pointer; transition: transform 150ms ${EASE}; outline: none; }
         .topbar-avatar-btn:active { transform: scale(0.92); }
+        .topbar-avatar-btn:focus-visible { box-shadow: 0 0 0 2px rgba(167,139,250,0.6); border-radius: 50%; }
         @media (max-width: 420px) {
           .topbar-brand { gap: 6px !important; padding-left: 2px !important; }
           .topbar-shared-logo .brand-logo-text { display: none; }
           .topbar-context-id { display: none; }
           .topbar-context-title { max-width: 42vw; }
+        }
+
+        .tb-token-badge { transition: box-shadow 220ms ${EASE}, background 220ms ${EASE}; }
+        .tb-token-badge.pulse {
+          animation: tbTokenPulse 650ms ${EASE};
+        }
+        @keyframes tbTokenPulse {
+          0%   { box-shadow: 0 0 0 0 rgba(167,139,250,0.55); }
+          40%  { box-shadow: 0 0 0 5px rgba(167,139,250,0.0); background: linear-gradient(145deg, rgba(124,58,237,0.4), rgba(124,58,237,0.15)); }
+          100% { box-shadow: 0 0 0 0 rgba(167,139,250,0); }
         }
 
         .topbar-drop-item { transition: background 140ms ${EASE}, color 140ms ${EASE}; }

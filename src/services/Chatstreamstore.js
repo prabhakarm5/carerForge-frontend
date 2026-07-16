@@ -269,7 +269,7 @@ const useChatStreamStore = create((set, get) => ({
                         message,
                         model: model || null,
                         image: image || null,
-                        responseStyle: localStorage.getItem("cf_response_style") || "concise",
+                        responseStyle: localStorage.getItem("cf_response_style") || "auto",
                     }),
                     signal: controller.signal,
                 });
@@ -289,15 +289,24 @@ const useChatStreamStore = create((set, get) => ({
                             message,
                             model: model || null,
                             image: image || null,
-                        responseStyle: localStorage.getItem("cf_response_style") || "concise",
+                            responseStyle: localStorage.getItem("cf_response_style") || "auto",
                         }),
                         signal: controller.signal,
                     });
                 }
 
-                if (!response.ok || !response.body) {
-                    throw new Error(`Stream request failed (${response.status})`);
+                if (!response.ok) {
+                    const rawError = await response.text().catch(() => "");
+                    let message = `Stream request failed (${response.status})`;
+                    try {
+                        const parsed = JSON.parse(rawError);
+                        message = parsed.message || parsed.error || message;
+                    } catch {
+                        if (rawError.trim()) message = rawError.trim();
+                    }
+                    throw new Error(message);
                 }
+                if (!response.body) throw new Error("Streaming response body is unavailable");
 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder("utf-8");
@@ -317,6 +326,8 @@ const useChatStreamStore = create((set, get) => ({
                     }
                 }
 
+                sseBuffer += decoder.decode();
+                sseBuffer = sseBuffer.replace(/\r\n/g, "\n");
                 if (sseBuffer.trim()) handleEvent(sseBuffer);
 
                 flushPendingTextSync();

@@ -1,7 +1,8 @@
 // src/routes/AppRoutes.jsx
 
 import { lazy, Suspense, useEffect } from "react";
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Navigate, Routes, Route, useLocation } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 
 // ================= PUBLIC PAGES =================
 import HomePage from "../pages/Home/HomePage";
@@ -57,13 +58,31 @@ import PaymentPolicy from "../shared/Paymentpolicy";
 // ================= 404 =================
 import NotFound from "../pages/NotFound";
 
+const WelcomePage = lazy(() => import("../pages/Welcome/WelcomePage"));
 const ResumeAIPage = lazy(() => import("../pages/ResumeAI/ResumeAIPage"));
 const CoverLetterPage = lazy(() => import("../pages/CoverLetter/CoverLetterPage"));
 const InterviewPage = lazy(() => import("../pages/Interview/InterviewPage"));
 const JobsPage = lazy(() => import("../pages/Jobs/JobsPage"));
-const SupportPage = lazy(() => import("../pages/Support/SupportPage"));
+const PromosPage = lazy(() => import("../pages/Promos/PromosPage"));
 const AdminLoginPage = lazy(() => import("../pages/Admin/AdminLoginPage"));
-const AdminDashboardPage = lazy(() => import("../pages/Admin/AdminDashboardPage"));
+const AdminLayout = lazy(() => import("../pages/Admin/AdminLayout"));
+const AdminOverviewPage = lazy(() => import("../pages/Admin/pages/AdminOverviewPage"));
+const AdminRequestsPage = lazy(() => import("../pages/Admin/pages/AdminRequestsPage"));
+const AdminUsersPage = lazy(() => import("../pages/Admin/pages/AdminUsersPage"));
+const AdminPromosPage = lazy(() => import("../pages/Admin/pages/AdminPromosPage"));
+const AdminPlansPage = lazy(() => import("../pages/Admin/pages/AdminPlansPage"));
+const AdminSupportPage = lazy(() => import("../pages/Admin/pages/AdminSupportPage"));
+const AdminSystemPage = lazy(() => import("../pages/Admin/pages/AdminSystemPage"));
+
+function RouteLoading({ label, fullPage = false, admin = false }) {
+    const className = admin
+        ? "admin-route-loader"
+        : `grid ${fullPage ? "min-h-dvh" : "min-h-[45vh]"} place-content-center justify-items-center gap-3 bg-[#050810] text-sm text-slate-400`;
+    return <div className={className} role="status" aria-live="polite">
+        <Loader2 className="animate-spin text-cyan-300" size={22} />
+        <span>{label}</span>
+    </div>;
+}
 
 const SITE_NAME = "CareerForge AI";
 
@@ -91,7 +110,14 @@ const ROUTE_TITLES = {
     "/oauth/success": "Signing You In",
     "/admin/login": "Admin Sign In",
     "/admin/dashboard": "Admin Dashboard",
+    "/admin/requests": "Request History",
+    "/admin/users": "User Management",
+    "/admin/promos": "Promo Campaigns",
+    "/admin/plans": "Plan Management",
+    "/admin/support": "Support Inbox",
+    "/admin/system": "System Status",
 
+    "/welcome": "Welcome",
     "/dashboard": "Dashboard",
     "/chat": "Chat",
     "/chat/*": "Chat",
@@ -103,6 +129,7 @@ const ROUTE_TITLES = {
     "/profile": "Your Profile",
     "/wallet": "Wallet",
     "/support": "Support Center",
+    "/promos": "Rewards & Promos",
 
     "/payment/success": "Payment Successful",
     "/payment/failed": "Payment Failed",
@@ -203,21 +230,30 @@ export default function AppRoutes() {
                 <Route
                     path="/admin/login"
                     element={
-                        <Suspense fallback={<div className="admin-route-loader">Loading secure sign in...</div>}>
+                        <Suspense fallback={<RouteLoading label="Loading secure sign in..." admin />}>
                             <AdminLoginPage />
                         </Suspense>
                     }
                 />
                 <Route
-                    path="/admin/dashboard"
+                    path="/admin"
                     element={
                         <AdminRoute>
-                            <Suspense fallback={<div className="admin-route-loader">Loading admin dashboard...</div>}>
-                                <AdminDashboardPage />
+                            <Suspense fallback={<RouteLoading label="Opening admin console..." fullPage />}>
+                                <AdminLayout />
                             </Suspense>
                         </AdminRoute>
                     }
-                />
+                >
+                    <Route index element={<Navigate to="/admin/dashboard" replace />} />
+                    <Route path="dashboard" element={<Suspense fallback={<RouteLoading label="Loading overview..." admin />}><AdminOverviewPage /></Suspense>} />
+                    <Route path="requests" element={<Suspense fallback={<RouteLoading label="Loading request history..." admin />}><AdminRequestsPage /></Suspense>} />
+                    <Route path="users" element={<Suspense fallback={<RouteLoading label="Loading users..." admin />}><AdminUsersPage /></Suspense>} />
+                    <Route path="promos" element={<Suspense fallback={<RouteLoading label="Loading promos..." admin />}><AdminPromosPage /></Suspense>} />
+                    <Route path="plans" element={<Suspense fallback={<RouteLoading label="Loading plans..." admin />}><AdminPlansPage /></Suspense>} />
+                    <Route path="support" element={<Suspense fallback={<RouteLoading label="Loading support..." admin />}><AdminSupportPage /></Suspense>} />
+                    <Route path="system" element={<Suspense fallback={<RouteLoading label="Loading system status..." admin />}><AdminSystemPage /></Suspense>} />
+                </Route>
                 {/* ================================================================
                     PROTECTED ROUTES
                     Sirf logged-in user access kar sakta hai.
@@ -231,6 +267,9 @@ export default function AppRoutes() {
                         </ProtectedRoute>
                     }
                 >
+                    {/* Workspace chooser shown immediately after user login */}
+                    <Route path="/welcome" element={<Suspense fallback={<RouteLoading label="Opening your workspace..." />}><WelcomePage /></Suspense>} />
+
                     {/* Main dashboard */}
                     <Route path="/dashboard" element={<DashboardPage />} />
 
@@ -245,7 +284,7 @@ export default function AppRoutes() {
                     <Route
                         path="/resume"
                         element={
-                            <Suspense fallback={<div className="grid min-h-[45vh] place-items-center text-sm text-slate-400">Loading Resume AI...</div>}>
+                            <Suspense fallback={<RouteLoading label="Loading Resume AI..." />}>
                                 <ResumeAIPage />
                             </Suspense>
                         }
@@ -255,7 +294,7 @@ export default function AppRoutes() {
                     <Route
                         path="/cover-letter"
                         element={
-                            <Suspense fallback={<div className="grid min-h-[45vh] place-items-center text-sm text-slate-400">Loading Cover Letter Studio...</div>}>
+                            <Suspense fallback={<RouteLoading label="Loading Cover Letter Studio..." />}>
                                 <CoverLetterPage />
                             </Suspense>
                         }
@@ -264,7 +303,7 @@ export default function AppRoutes() {
                     <Route
                         path="/interview"
                         element={
-                            <Suspense fallback={<div className="grid min-h-[45vh] place-items-center text-sm text-slate-400">Preparing interview room...</div>}>
+                            <Suspense fallback={<RouteLoading label="Preparing interview room..." />}>
                                 <InterviewPage />
                             </Suspense>
                         }
@@ -273,7 +312,7 @@ export default function AppRoutes() {
                     <Route
                         path="/jobs"
                         element={
-                            <Suspense fallback={<div className="grid min-h-[45vh] place-items-center text-sm text-slate-400">Loading live jobs...</div>}>
+                            <Suspense fallback={<RouteLoading label="Loading live jobs..." />}>
                                 <JobsPage />
                             </Suspense>
                         }
@@ -283,8 +322,9 @@ export default function AppRoutes() {
 
                     {/* Wallet */}
                     <Route path="/wallet" element={<WalletPage />} />
-                    {/* Support tickets */}
-                    <Route path="/support" element={<Suspense fallback={<div className="grid min-h-[45vh] place-items-center text-sm text-slate-400">Loading support...</div>}><SupportPage /></Suspense>} />
+                    {/* Rewards and support */}
+                    <Route path="/promos" element={<Suspense fallback={<RouteLoading label="Loading rewards..." />}><PromosPage /></Suspense>} />
+                    <Route path="/support" element={<Navigate to="/settings?tab=support" replace />} />
 
                     {/* Payment result pages */}
                     <Route path="/payment/success" element={<PaymentSuccessPage />} />

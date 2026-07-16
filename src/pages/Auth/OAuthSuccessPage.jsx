@@ -40,9 +40,9 @@ export default function OAuthSuccessPage() {
 
         login(response);
         setStatus("success");
-        setMessage("Login complete. Opening your dashboard...");
+        setMessage("Login complete. Opening your workspace...");
         toast.success(`${provider} login successful`);
-        setTimeout(() => navigate("/dashboard", { replace: true }), 650);
+        setTimeout(() => navigate("/welcome", { replace: true }), 650);
       } catch (error) {
         if (cancelled) return;
 

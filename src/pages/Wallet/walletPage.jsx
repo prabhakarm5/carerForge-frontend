@@ -84,6 +84,7 @@ export default function WalletPage() {
 
   const [rechargeOpen, setRechargeOpen] = useState(false);
   const [rechargeReason, setRechargeReason] = useState("tokens");
+  const [offerPromoCode, setOfferPromoCode] = useState("");
   const [checkoutInProgress, setCheckoutInProgress] = useState(false);
 
   // ================= LOAD WALLET BALANCE =================
@@ -150,6 +151,7 @@ export default function WalletPage() {
       });
 
       toast.success("Payment successful!");
+      localStorage.removeItem("cf_models_cache_v1");
       await Promise.all([loadWallet(), loadHistory(), loadPayments()]);
 
       navigate("/payment/success", {
@@ -194,6 +196,17 @@ export default function WalletPage() {
     // handleCheckout intentionally runs only for a newly selected plan id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, checkoutInProgress, setSearchParams]);
+  useEffect(() => {
+    const offer = searchParams.get("offer");
+    if (!offer) return;
+    setOfferPromoCode(offer);
+    setRechargeReason("tokens");
+    setRechargeOpen(true);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("offer");
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   function openRecharge(reason = "tokens") {
     setRechargeReason(reason);
     setRechargeOpen(true);
@@ -387,7 +400,7 @@ export default function WalletPage() {
                     cursor: "pointer", fontFamily: "inherit",
                   }}
                 >
-                  {planInfo.label === "Free" ? "View plans" : "View plan"} <ChevronRight size={13} />
+                  {planInfo.label === "Free" ? "View plans" : "Buy again or switch"} <ChevronRight size={13} />
                 </button>
               </div>
             )}
@@ -537,7 +550,7 @@ export default function WalletPage() {
                     <p className="mt-1 text-[11px] text-white/35">{formatDate(payment.updatedAt || payment.createdAt)}{payment.failureReason ? " · " + payment.failureReason : payment.gatewayStatus ? " · Gateway: " + payment.gatewayStatus : ""}</p>
                   </div>
                   <strong className="text-sm text-white/80">₹{Number(payment.amount || 0).toLocaleString("en-IN")}</strong>
-                  {failed && <button onClick={() => navigate("/support?new=1&orderId=" + encodeURIComponent(payment.orderId) + "&reason=" + encodeURIComponent(payment.failureReason || "Payment failed"))} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-2.5 text-[11px] font-semibold text-cyan-300"><LifeBuoy size={12} /> Get help</button>}
+                  {failed && <button onClick={() => navigate("/settings?tab=support&new=1&orderId=" + encodeURIComponent(payment.orderId) + "&reason=" + encodeURIComponent(payment.failureReason || "Payment failed"))} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-2.5 text-[11px] font-semibold text-cyan-300"><LifeBuoy size={12} /> Get help</button>}
                 </div>
               );
             })}
@@ -550,6 +563,7 @@ export default function WalletPage() {
         reason={rechargeReason}
         onClose={() => setRechargeOpen(false)}
         currentPlanId={wallet?.currentPlanId}
+        initialPromoCode={offerPromoCode}
         onActivated={handlePlanActivated}
       />
 
