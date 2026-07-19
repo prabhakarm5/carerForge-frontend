@@ -2,6 +2,7 @@ import axios from "axios";
 import { API_BASE_URL } from "../config/api";
 import useAuthStore from "../store/authStore";
 import { isForegroundActive, onForegroundActivity } from "./authActivity";
+import { notifyRechargeForError } from "./rechargeEvents";
 
 const axiosInstance = axios.create({
     baseURL: API_BASE_URL,
@@ -84,6 +85,21 @@ function isAuthBootstrapRequest(url = "") {
         || url.includes("/api/auth/admin-login")
         || url.includes("/api/auth/verify-admin-login-otp")
         || url.includes("/api/auth/resend-admin-login-otp");
+}
+function isPublicRoute(pathname = window.location.pathname) {
+    return pathname === "/"
+        || pathname.startsWith("/login")
+        || pathname.startsWith("/register")
+        || pathname.startsWith("/verification-")
+        || pathname.startsWith("/verify-email")
+        || pathname.startsWith("/forgot-password")
+        || pathname.startsWith("/verify-reset-otp")
+        || pathname.startsWith("/reset-password")
+        || pathname.startsWith("/oauth/")
+        || pathname.startsWith("/admin/login")
+        || pathname.startsWith("/terms")
+        || pathname.startsWith("/payment-policy")
+        || pathname.startsWith("/docs/");
 }
 // ================= PROACTIVE REFRESH SCHEDULER =================
 function scheduleProactiveRefresh() {
@@ -192,7 +208,7 @@ async function silentRefresh() {
         if (invalidSession) {
             refreshPending = false;
             useAuthStore.getState().logoutLocalOnly();
-            if (!window.location.pathname.startsWith("/login")) {
+            if (!isPublicRoute()) {
                 window.location.replace("/login?reason=session-expired");
             }
         } else {
@@ -241,7 +257,7 @@ if (refreshChannel) {
             if (invalidSession) {
                 refreshPending = false;
                 useAuthStore.getState().logoutLocalOnly();
-                if (document.visibilityState === "visible" && !window.location.pathname.startsWith("/login")) {
+                if (document.visibilityState === "visible" && !isPublicRoute()) {
                     window.location.replace("/login?reason=session-expired");
                 }
             } else {
@@ -319,7 +335,13 @@ axiosInstance.interceptors.response.use(
     (response) => response,
 
     async (error) => {
-        const originalRequest = error.config;
+        const originalRequest = error.config || {};
+
+        // Any protected feature can exhaust credits. Notify the dashboard-level
+        // modal once, while feature pages remain free to show their own message.
+        if (!originalRequest._rechargeNotified && notifyRechargeForError(error)) {
+            originalRequest._rechargeNotified = true;
+        }
 
         // ✅ Note: agar server hi down hai to error.response undefined
         // hoga, aur status check khud-ba-khud "true" ban jaayega (kyunki

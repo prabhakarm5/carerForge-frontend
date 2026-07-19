@@ -37,12 +37,23 @@ function canvasBlob(canvas) {
   return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.48));
 }
 
+function setAudioSessionType(type) {
+  try {
+    if (navigator.audioSession) navigator.audioSession.type = type;
+  } catch {
+    // Audio Session is experimental; output routing still works without it.
+  }
+}
+
 export default function useGeminiLiveInterview(config) {
   const sessionRef = useRef(null);
   const streamRef = useRef(null);
   const inputContextRef = useRef(null);
   const outputContextRef = useRef(null);
   const outputGainRef = useRef(null);
+  const outputAudioRef = useRef(null);
+  const outputDestinationRef = useRef(null);
+  const selectedSinkIdRef = useRef("");
   const processorRef = useRef(null);
   const videoTimerRef = useRef(null);
   const frameSendingRef = useRef(false);
@@ -71,6 +82,8 @@ export default function useGeminiLiveInterview(config) {
   const [micEnabled, setMicEnabledState] = useState(true);
   const [cameraEnabled, setCameraEnabledState] = useState(true);
   const [speakerEnabled, setSpeakerEnabledState] = useState(true);
+  const [speakerReady, setSpeakerReady] = useState(false);
+  const [speakerSelectionSupported] = useState(() => Boolean(navigator.mediaDevices?.selectAudioOutput));
   const [inputLevel, setInputLevel] = useState(0);
   const [outputLevel, setOutputLevel] = useState(0);
   const [connectionMs, setConnectionMs] = useState(null);
@@ -163,6 +176,14 @@ export default function useGeminiLiveInterview(config) {
     inputContextRef.current = null;
     outputContextRef.current = null;
     outputGainRef.current = null;
+    outputDestinationRef.current = null;
+    if (outputAudioRef.current) {
+      outputAudioRef.current.pause();
+      outputAudioRef.current.srcObject = null;
+    }
+    outputAudioRef.current = null;
+    setSpeakerReady(false);
+    setAudioSessionType("auto");
     stopOutput();
     voiceRunStartedAtRef.current = 0;
     answerVoiceStartedAtRef.current = 0;
@@ -172,12 +193,54 @@ export default function useGeminiLiveInterview(config) {
     setStatus(reason);
   }, [clearVoiceTimers, stopOutput]);
 
+  const prepareSpeakerOutput = useCallback(async ({ chooseDevice = false } = {}) => {
+    setAudioSessionType("playback");
+
+    if (chooseDevice && navigator.mediaDevices?.selectAudioOutput) {
+      const device = await navigator.mediaDevices.selectAudioOutput(
+        selectedSinkIdRef.current ? { deviceId: selectedSinkIdRef.current } : undefined,
+      );
+      selectedSinkIdRef.current = device.deviceId;
+    }
+
+    const context = outputContextRef.current;
+    const audio = outputAudioRef.current;
+    const sinkId = selectedSinkIdRef.current;
+    if (context?.state === "suspended") await context.resume();
+
+    if (sinkId) {
+      if (typeof context?.setSinkId === "function") await context.setSinkId(sinkId);
+      else if (typeof audio?.setSinkId === "function") await audio.setSinkId(sinkId);
+    } else if (typeof context?.setSinkId === "function") {
+      await context.setSinkId("default").catch(() => {});
+    } else if (typeof audio?.setSinkId === "function") {
+      await audio.setSinkId("default").catch(() => {});
+    }
+
+    if (audio?.srcObject) {
+      audio.muted = false;
+      audio.volume = 1;
+      await audio.play();
+    }
+
+    const gain = outputGainRef.current;
+    if (context && gain) gain.gain.setTargetAtTime(1.12, context.currentTime, 0.025);
+    setSpeakerEnabledState(true);
+    setSpeakerReady(Boolean(context && (!audio || !audio.paused)));
+    setNotice(chooseDevice ? "Audio output selected. Speaker is ready." : "Speaker is ready.");
+  }, []);
+
   const playPcm = useCallback(async (base64) => {
     window.clearTimeout(modelResponseTimerRef.current);
     modelResponseTimerRef.current = null;
     const context = outputContextRef.current;
     if (!context) return;
+    setAudioSessionType("playback");
     if (context.state === "suspended") await context.resume();
+    const outputAudio = outputAudioRef.current;
+    if (outputAudio?.srcObject && outputAudio.paused) {
+      outputAudio.play().then(() => setSpeakerReady(true)).catch(() => setSpeakerReady(false));
+    }
     const bytes = base64ToBytes(base64);
     const samples = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 2));
     let outputEnergy = 0;
@@ -238,7 +301,7 @@ export default function useGeminiLiveInterview(config) {
     }, 7000);
   }, []);
 
-  const start = useCallback(async (mediaStream, videoElement) => {
+  const start = useCallback(async (mediaStream, videoElement, outputAudioElement) => {
     if (sessionRef.current || status === "connecting") return;
     intentionalCloseRef.current = false;
     connectedAtRef.current = performance.now();
@@ -250,6 +313,7 @@ export default function useGeminiLiveInterview(config) {
     setOutputLevel(0);
     setStatus("connecting");
     streamRef.current = mediaStream;
+    outputAudioRef.current = outputAudioElement || null;
     setMicEnabledState(mediaStream.getAudioTracks().some((track) => track.enabled));
     setCameraEnabledState(mediaStream.getVideoTracks().some((track) => track.enabled));
 
@@ -269,9 +333,28 @@ export default function useGeminiLiveInterview(config) {
       compressor.attack.value = 0.003;
       compressor.release.value = 0.25;
       outputGain.connect(compressor);
-      compressor.connect(outputContext.destination);
+      const outputAudio = outputAudioRef.current;
+      if (outputAudio) {
+        const mediaDestination = outputContext.createMediaStreamDestination();
+        compressor.connect(mediaDestination);
+        outputDestinationRef.current = mediaDestination;
+        outputAudio.srcObject = mediaDestination.stream;
+        outputAudio.autoplay = true;
+        outputAudio.playsInline = true;
+        outputAudio.muted = !speakerEnabled;
+        outputAudio.volume = 1;
+      } else {
+        compressor.connect(outputContext.destination);
+      }
       outputGainRef.current = outputGain;
+      setAudioSessionType("playback");
       await Promise.all([outputContext.resume(), inputContext.resume()]);
+      try {
+        await prepareSpeakerOutput();
+      } catch {
+        setSpeakerReady(false);
+        setNotice("Tap Speaker once to allow interview audio on this device.");
+      }
 
       const ai = new GoogleGenAI({ apiKey: credentials.token, apiVersion: "v1alpha" });
       const liveSession = await ai.live.connect({
@@ -449,7 +532,7 @@ export default function useGeminiLiveInterview(config) {
       setError(message);
       throw startError;
     }
-  }, [addTranscript, clearVoiceTimers, close, config, flushTranscript, playPcm, scheduleModelResponseWatchdog, scheduleNoAnswerPrompt, speakerEnabled, status, stopOutput]);
+  }, [addTranscript, clearVoiceTimers, close, config, flushTranscript, playPcm, prepareSpeakerOutput, scheduleModelResponseWatchdog, scheduleNoAnswerPrompt, speakerEnabled, status, stopOutput]);
 
   const setMicEnabled = useCallback((enabled) => {
     streamRef.current?.getAudioTracks().forEach((track) => { track.enabled = enabled; });
@@ -470,14 +553,37 @@ export default function useGeminiLiveInterview(config) {
     setCameraEnabledState(enabled && Boolean(streamRef.current?.getVideoTracks().length));
   }, []);
 
-  const setSpeakerEnabled = useCallback((enabled) => {
+  const setSpeakerEnabled = useCallback(async (enabled) => {
     const context = outputContextRef.current;
     const gain = outputGainRef.current;
-    if (context && gain) gain.gain.setTargetAtTime(enabled ? 1.12 : 0, context.currentTime, 0.025);
-    if (!enabled) stopOutput();
-    setSpeakerEnabledState(enabled);
-    setNotice(enabled ? "Speaker on." : "Speaker muted.");
-  }, [stopOutput]);
+    if (enabled) {
+      try {
+        await prepareSpeakerOutput();
+      } catch {
+        setSpeakerReady(false);
+        setNotice("Your browser blocked audio. Tap Speaker again or raise the phone media volume.");
+      }
+      return;
+    }
+    if (context && gain) gain.gain.setTargetAtTime(0, context.currentTime, 0.025);
+    if (outputAudioRef.current) outputAudioRef.current.muted = true;
+    stopOutput();
+    setSpeakerEnabledState(false);
+    setSpeakerReady(false);
+    setNotice("Speaker muted.");
+  }, [prepareSpeakerOutput, stopOutput]);
+
+  const selectSpeakerOutput = useCallback(async () => {
+    try {
+      await prepareSpeakerOutput({ chooseDevice: true });
+      return true;
+    } catch (selectionError) {
+      if (selectionError?.name !== "NotAllowedError") {
+        setNotice("Could not change audio output. Check browser speaker permission.");
+      }
+      return false;
+    }
+  }, [prepareSpeakerOutput]);
 
   useEffect(() => {
     const stopWhenHidden = () => { if (document.hidden && sessionRef.current) close("paused-background"); };
@@ -493,7 +599,8 @@ export default function useGeminiLiveInterview(config) {
 
   return {
     status, error, notice, transcript, connectionMs, inputLevel, outputLevel,
-    micEnabled, cameraEnabled, speakerEnabled,
+    micEnabled, cameraEnabled, speakerEnabled, speakerReady, speakerSelectionSupported,
     start, close, setMicEnabled, setCameraEnabled, setSpeakerEnabled,
+    prepareSpeakerOutput, selectSpeakerOutput,
   };
 }

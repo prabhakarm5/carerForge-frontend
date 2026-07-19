@@ -63,7 +63,7 @@ export default function AdminLayout() {
   const showLabels = !collapsed || mobileOpen;
 
   return (
-    <div className="flex min-h-dvh bg-[#070b12] text-slate-100">
+    <div className="flex h-dvh min-h-0 w-full max-w-[100vw] overflow-hidden bg-[#070b12] text-slate-100">
       {mobileOpen && <button type="button" aria-label="Close admin navigation" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm lg:hidden" />}
 
       <aside className={`${mobileOpen ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-[80] flex w-[min(86vw,280px)] flex-col border-r border-white/10 bg-[#090f1a] shadow-2xl shadow-black/50 transition-[transform,width] duration-200 lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0 lg:shadow-none ${collapsed ? "lg:w-[76px]" : "lg:w-[248px]"}`}>
@@ -92,13 +92,13 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 max-w-full flex-1 overflow-hidden">
         <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-white/10 bg-[#070b12]/95 px-3 backdrop-blur lg:hidden">
           <button type="button" onClick={() => setMobileOpen(true)} className="grid h-9 w-9 place-items-center rounded-md border border-white/10 text-slate-300" title="Open navigation"><Menu size={17} /></button>
           <strong className="text-sm text-white">{activeLabel}</strong>
           <button type="button" onClick={() => window.location.assign("/dashboard")} className="grid h-9 w-9 place-items-center rounded-md border border-white/10 text-slate-400" title="Open user app"><AppWindow size={16} /></button>
         </header>
-        <main className="mx-auto w-full max-w-[1600px] p-3 sm:p-5 lg:p-7">
+        <main className="mx-auto h-[calc(100dvh-56px)] w-full max-w-[1600px] overflow-x-hidden overflow-y-auto p-3 sm:p-5 lg:h-dvh lg:p-7">
           <Outlet />
         </main>
       </div>

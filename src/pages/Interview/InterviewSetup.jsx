@@ -14,7 +14,7 @@ const fieldClass = "min-h-10 w-full rounded-lg border border-slate-700 bg-[#0b13
 const labelClass = "flex flex-col gap-1.5 text-[9px] font-extrabold uppercase text-slate-400";
 const labelTitleClass = "flex items-center gap-1.5";
 
-export default function InterviewSetup({ form, setForm, resumes, models, submitting, uploadingResume, onSubmit, onWritten, onResumeUpload }) {
+export default function InterviewSetup({ form, setForm, resumes, models, submitting, uploadingResume, uploadingJobDescription, jobDescriptionUpload, onSubmit, onWritten, onResumeUpload, onJobDescriptionUpload }) {
   const set = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
   return <form className="mx-auto min-h-full w-full max-w-[1220px] px-3 pb-7 pt-3 text-slate-50 sm:px-5 sm:pb-10 sm:pt-5 lg:px-6" onSubmit={onSubmit}>
@@ -46,16 +46,33 @@ export default function InterviewSetup({ form, setForm, resumes, models, submitt
           <label className={labelClass}><span className={labelTitleClass}>Difficulty</span><select className={fieldClass} value={form.difficulty} onChange={(e) => set("difficulty", e.target.value)}>{DIFFICULTIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label className={labelClass}><span className={labelTitleClass}>Speaking language</span><select className={fieldClass} value={form.language} onChange={(e) => set("language", e.target.value)}><option value="AUTO">Automatic Hindi / English</option><option value="HINDI">Hindi / Hinglish</option><option value="ENGLISH">English only</option></select></label>
           <label className={labelClass}><span className={labelTitleClass}>Interviewer style</span><select className={fieldClass} value={form.interviewerStyle} onChange={(e) => set("interviewerStyle", e.target.value)}><option value="STRICT">Strict and realistic</option><option value="BALANCED">Balanced</option><option value="SUPPORTIVE">Supportive</option></select></label>
-          <label className={`${labelClass} sm:col-span-2`}><span className={labelTitleClass}>Job description, course brief, or preparation notes (optional)</span><textarea className={`${fieldClass} min-h-28 max-h-56 resize-y leading-5 sm:min-h-32`} value={form.jobDescription} onChange={(e) => set("jobDescription", e.target.value)} placeholder="Paste responsibilities or admission criteria when available." rows={5} maxLength={20000} /></label>
+          <div className="sm:col-span-2">
+            <label className={labelClass}><span className={labelTitleClass}>Job description, course brief, or preparation notes (optional)</span><textarea className={`${fieldClass} min-h-28 max-h-56 resize-y leading-5 sm:min-h-32`} value={form.jobDescription} onChange={(e) => set("jobDescription", e.target.value)} placeholder="Paste responsibilities or upload a PDF/image below." rows={5} maxLength={20000} /></label>
+            <div className="mt-2 flex min-w-0 items-center gap-2 rounded-lg border border-dashed border-cyan-900 bg-cyan-950/20 p-2.5">
+              <label className="flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-cyan-800 bg-cyan-950/60 px-3 text-[9px] font-bold text-cyan-200 hover:border-cyan-500">
+                {uploadingJobDescription ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                <span>{uploadingJobDescription ? "Processing..." : "Upload PDF / image"}</span>
+                <input className="sr-only" type="file" accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp" disabled={uploadingJobDescription || uploadingResume || submitting} onChange={(event) => onJobDescriptionUpload(event.target.files?.[0], event)} />
+              </label>
+              <span className="min-w-0 flex-1 text-[8px] leading-4 text-slate-500">Scanned PDFs and images are read securely. Maximum 5 MB.</span>
+            </div>
+            {jobDescriptionUpload && (
+              <div className="mt-2 rounded-lg border border-slate-700 bg-[#09111c] p-2.5" role="status" aria-live="polite">
+                <div className="flex min-w-0 items-center gap-2"><FileText size={14} className="shrink-0 text-cyan-300" /><strong className="min-w-0 flex-1 truncate text-[9px] text-slate-200">{jobDescriptionUpload.fileName}</strong><span className="text-[8px] tabular-nums text-cyan-300">{jobDescriptionUpload.progress}%</span></div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800"><i className="block h-full rounded-full bg-cyan-400 transition-[width] duration-300" style={{ width: `${jobDescriptionUpload.progress}%` }} /></div>
+                <small className="mt-1.5 block text-[8px] text-slate-500">{jobDescriptionUpload.stage}</small>
+              </div>
+            )}
+          </div>
         </div>
 
         <section className="mt-3 grid items-center gap-3 rounded-lg border border-slate-700 bg-[#09111c] p-2.5 min-[701px]:grid-cols-[minmax(190px,.72fr)_minmax(300px,1.28fr)] min-[701px]:p-3">
           <div className="flex min-w-0 items-center gap-2.5"><FileText size={17} className="shrink-0 text-amber-300" /><span><strong className="block text-[11px]">Resume context</strong><small className="mt-1 block text-[8px] leading-4 text-slate-500">Questions can challenge your skills, projects, impact and gaps.</small></span></div>
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_40px] gap-2 min-[701px]:grid-cols-[minmax(0,1fr)_auto]">
-            <select className="h-[38px] min-w-0 rounded-md border border-slate-700 bg-[#0d1724] px-2.5 text-[10px] text-slate-200 outline-none" value={form.resumeProjectId} onChange={(e) => set("resumeProjectId", e.target.value)} aria-label="Select analyzed resume"><option value="">Continue without a resume</option>{resumes.map((item) => <option key={item.id} value={item.id}>{item.fileName || "Analyzed resume"}</option>)}</select>
+            <select className="h-[38px] min-w-0 rounded-md border border-slate-700 bg-[#0d1724] px-2.5 text-[10px] text-slate-200 outline-none" value={form.resumeProjectId} onChange={(e) => setForm((current) => ({ ...current, resumeProjectId: e.target.value, resumeContext: "", resumeFileName: "" }))} aria-label="Select analyzed resume"><option value="">{form.resumeFileName ? `Attached: ${form.resumeFileName}` : "Continue without a resume"}</option>{resumes.map((item) => <option key={item.id} value={item.id}>{item.fileName || "Analyzed resume"}</option>)}</select>
             <label className="flex h-[38px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-amber-800/70 bg-amber-950/50 px-2.5 text-amber-200 hover:border-amber-500 hover:bg-amber-950 min-[701px]:px-3">
-              {uploadingResume ? <Loader2 size={15} className="animate-spin" /> : <UploadCloud size={15} />}<span className="hidden text-[9px] min-[701px]:inline">{uploadingResume ? "Analyzing..." : "Upload PDF / DOCX"}</span>
-              <input className="sr-only" type="file" accept=".pdf,.doc,.docx,application/pdf" disabled={uploadingResume || submitting} onChange={(event) => onResumeUpload(event.target.files?.[0], event)} />
+              {uploadingResume ? <Loader2 size={15} className="animate-spin" /> : <UploadCloud size={15} />}<span className="hidden text-[9px] min-[701px]:inline">{uploadingResume ? "Reading..." : "Upload resume"}</span>
+              <input className="sr-only" type="file" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp,text/plain" disabled={uploadingResume || submitting} onChange={(event) => onResumeUpload(event.target.files?.[0], event)} />
             </label>
           </div>
         </section>
@@ -67,8 +84,8 @@ export default function InterviewSetup({ form, setForm, resumes, models, submitt
 
         <div className="mt-3 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">{[[Mic2,"Mic check in room"],[Video,"Camera optional"],[Gauge,"Direct live audio"],[BadgeCheck,"Strict evidence-based score"]].map(([Icon,text]) => <span className="flex items-center gap-1.5 rounded-md border border-slate-800 bg-[#0a111c] px-2 py-1.5 text-[7px] text-slate-400 sm:text-[8px]" key={text}><Icon size={14} className="text-cyan-300" />{text}</span>)}</div>
         <div className="sticky bottom-0 z-[5] -mx-3 -mb-7 mt-3 flex gap-2 border-t border-slate-800 bg-[#070b14f7] px-3 py-2.5 pb-[calc(10px+env(safe-area-inset-bottom))] min-[701px]:static min-[701px]:mx-0 min-[701px]:mb-0 min-[701px]:border-0 min-[701px]:bg-transparent min-[701px]:p-0">
-          <button className="flex min-h-[42px] flex-1 items-center justify-center gap-2 rounded-lg bg-cyan-400 px-4 text-[11px] font-black text-[#041318] transition hover:-translate-y-px hover:brightness-110 disabled:opacity-50" type="submit" disabled={submitting || uploadingResume}><Video size={17} /> Enter live interview</button>
-          <button className="flex min-h-[42px] w-12 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-[#0b1220] px-3 text-[0] font-extrabold text-slate-300 transition hover:-translate-y-px hover:bg-slate-800 disabled:opacity-50 sm:w-auto sm:text-xs" type="button" onClick={onWritten} disabled={submitting || uploadingResume}>{submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}<span className="hidden sm:inline">Written practice</span></button>
+          <button className="flex min-h-[42px] flex-1 items-center justify-center gap-2 rounded-lg bg-cyan-400 px-4 text-[11px] font-black text-[#041318] transition hover:-translate-y-px hover:brightness-110 disabled:opacity-50" type="submit" disabled={submitting || uploadingResume || uploadingJobDescription}><Video size={17} /> Enter live interview</button>
+          <button className="flex min-h-[42px] w-12 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-[#0b1220] px-3 text-[0] font-extrabold text-slate-300 transition hover:-translate-y-px hover:bg-slate-800 disabled:opacity-50 sm:w-auto sm:text-xs" type="button" onClick={onWritten} disabled={submitting || uploadingResume || uploadingJobDescription}>{submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}<span className="hidden sm:inline">Written practice</span></button>
         </div>
       </section>
     </div>

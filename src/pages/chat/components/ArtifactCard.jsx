@@ -2,8 +2,9 @@ import { Code2, Download, Eye, LoaderCircle } from "lucide-react";
 import "./ArtifactCard.css";
 
 export default function ArtifactCard({ artifact, onOpenPanel, onDownload, isStreaming }) {
-  const status = isStreaming ? "building" : artifact.complete ? "ready" : "incomplete";
   const canOpen = Boolean(artifact.content);
+  // The stream ending is authoritative; useful HTML fragments do not need a closing </html> tag.
+  const status = isStreaming ? "building" : canOpen ? "ready" : "incomplete";
 
   return (
     <section className="chat-artifact-card" aria-label="Generated HTML artifact">

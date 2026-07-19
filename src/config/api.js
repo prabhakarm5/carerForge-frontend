@@ -199,6 +199,7 @@ export const API = {
     GET_ALL: "/api/interviews",
     START: "/api/interviews",
     LIVE_TOKEN: "/api/interviews/live-token",
+    EXTRACT_CONTEXT: "/api/interviews/context/extract",
     GET_BY_ID: (id) => `/api/interviews/${id}`,
     ANSWER: (id) => `/api/interviews/${id}/answers`,
     DELETE: (id) => `/api/interviews/${id}`,

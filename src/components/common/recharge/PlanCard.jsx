@@ -10,8 +10,8 @@ const PLAN_COLORS = [
 const FEATURES = {
   Free: ["Chat AI"],
   Basic: ["Chat AI", "Image AI"],
-  Pro: ["Chat AI", "Image AI", "Resume AI", "Website AI"],
-  Enterprise: ["Unlimited Chat", "Image AI", "Resume AI", "Website AI", "Priority Support"],
+  Pro: ["Chat AI", "Image AI", "Resume AI", "Interview AI"],
+  Enterprise: ["Unlimited Chat", "Image AI", "Resume AI", "Interview AI", "Priority Support"],
 };
 
 /**

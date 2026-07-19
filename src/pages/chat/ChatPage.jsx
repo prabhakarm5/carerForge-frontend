@@ -206,7 +206,6 @@ function useIsMobile(breakpoint = 768) {
     const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
     const handler = (e) => setIsMobile(e.matches);
     mq.addEventListener("change", handler);
-    setIsMobile(mq.matches);
     return () => mq.removeEventListener("change", handler);
   }, [breakpoint]);
   return isMobile;
@@ -228,24 +227,13 @@ function useThrottledValue(value, delayMs) {
   const timeoutRef = useRef(null);
 
   useEffect(() => {
-    if (!delayMs) {
-      clearTimeout(timeoutRef.current);
+    clearTimeout(timeoutRef.current);
+    const elapsed = Date.now() - lastRef.current;
+    const wait = delayMs ? Math.max(0, delayMs - elapsed) : 0;
+    timeoutRef.current = window.setTimeout(() => {
       lastRef.current = Date.now();
       setThrottled(value);
-      return;
-    }
-    const now = Date.now();
-    const elapsed = now - lastRef.current;
-    if (elapsed >= delayMs) {
-      lastRef.current = now;
-      setThrottled(value);
-    } else {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(() => {
-        lastRef.current = Date.now();
-        setThrottled(value);
-      }, delayMs - elapsed);
-    }
+    }, wait);
     return () => clearTimeout(timeoutRef.current);
   }, [value, delayMs]);
 
@@ -847,12 +835,6 @@ function EmptyState({ onSuggest }) {
         >
           <ImageIcon size={11} /> Image AI
         </Link>
-        <Link to="/pdf-ai" style={{ display: "flex", alignItems: "center", gap: 5, color: "#475569", textDecoration: "none" }}
-          onMouseEnter={e => e.currentTarget.style.color = "#a78bfa"}
-          onMouseLeave={e => e.currentTarget.style.color = "#475569"}
-        >
-          <FileText size={11} /> PDF AI
-        </Link>
       </div>
     </div>
   );
@@ -933,13 +915,15 @@ function ModelSelector({ models, selectedId, onSelect, onLocked, disabled }) {
 
   useEffect(() => {
     function onClickOutside(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+        setExpanded(false);
+      }
     }
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  useEffect(() => { if (!open) setExpanded(false); }, [open]);
 
   if (!models.length) return null;
 
@@ -951,7 +935,15 @@ function ModelSelector({ models, selectedId, onSelect, onLocked, disabled }) {
     <div ref={ref} style={{ position: "relative" }}>
       <button
         type="button"
-        onClick={() => !disabled && setOpen(o => !o)}
+        onClick={() => {
+          if (disabled) return;
+          if (open) {
+            setOpen(false);
+            setExpanded(false);
+          } else {
+            setOpen(true);
+          }
+        }}
         disabled={disabled}
         style={{
           display: "flex", alignItems: "center", gap: 6,
@@ -1008,7 +1000,7 @@ function ModelSelector({ models, selectedId, onSelect, onLocked, disabled }) {
             }}
           >
             {visibleModels.map(m => (
-              <ModelRow key={m.id} m={m} active={m.id === selectedId} onLocked={(model) => { onLocked(model); setOpen(false); }} onSelect={(id) => { onSelect(id); setOpen(false); }} />
+              <ModelRow key={m.id} m={m} active={m.id === selectedId} onLocked={(model) => { onLocked(model); setOpen(false); setExpanded(false); }} onSelect={(id) => { onSelect(id); setOpen(false); setExpanded(false); }} />
             ))}
 
             {hasMore && (
@@ -1084,15 +1076,18 @@ export default function ChatPage() {
         });
       })
       .catch(() => { modelsFetchedThisSession = false; }); // allow retry next mount on failure
-  }, []);
+  }, [models.length]);
 
   useEffect(() => {
     if (selectedModelId) localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, selectedModelId);
   }, [selectedModelId]);
 
-  useEffect(() => {
-    if (!modelSupportsVision && attachedImage) setAttachedImage(null);
-  }, [modelSupportsVision]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleModelSelect = useCallback((modelId) => {
+    setSelectedModelId(modelId);
+    if (!models.find((model) => model.id === modelId)?.vision) {
+      setAttachedImage(null);
+    }
+  }, [models]);
 
   function handlePickImage(e) {
     const file = e.target.files?.[0];
@@ -1148,6 +1143,11 @@ export default function ChatPage() {
   const isWaiting        = !!liveStream && liveStream.waiting && !liveStream.text;
   const isBusy            = isStreamingHere || isWaiting;
   const showEmptyState   = !loadingHistory && !historyError && messages.length === 0 && !liveStream;
+  const lastMessage = messages[messages.length - 1];
+  const liveStreamCommitted = !!liveStream?.done
+    && !!liveStream.text
+    && (lastMessage?.role === "ASSISTANT" || lastMessage?.role === "assistant")
+    && lastMessage.content === liveStream.text;
 
   const NEAR_BOTTOM_PX = 120;
   useEffect(() => {
@@ -1182,29 +1182,63 @@ export default function ChatPage() {
     };
   }, [loadingHistory]);
 
-  useEffect(() => {
-    if (!isMobile || !window.visualViewport) return undefined;
-    const viewport = window.visualViewport;
-    function keepComposerAboveKeyboard() {
-      const shouldFollow = followOutputRef.current || document.activeElement === textareaRef.current;
-      if (!shouldFollow) return;
-      window.requestAnimationFrame(() => {
-        const element = scrollRef.current;
-        if (element) element.scrollTop = element.scrollHeight;
-      });
-    }
-    viewport.addEventListener("resize", keepComposerAboveKeyboard);
-    return () => viewport.removeEventListener("resize", keepComposerAboveKeyboard);
-  }, [isMobile]);
+  // The dashboard shell follows visualViewport height. Do not force the
+  // transcript to the bottom when the mobile keyboard opens; that used to
+  // move the user's reading position and could push the topbar off-screen.
   useEffect(() => {
     publishWorkspaceContext({ kind: "chat", title: liveStream?.latestTitle || conversationTitle || (id ? "Conversation" : "New chat"), id: id || null });
   }, [conversationTitle, id, liveStream?.latestTitle]);
 
+  const loadHistory = useCallback(async (conversationId) => {
+    const cached = loadCachedConversation(conversationId);
+    if (cached && cached.length) {
+      setMessages(cached);
+      setHistoryError(false);
+      isAtBottomRef.current = true;
+      window.setTimeout(() => {
+        const element = scrollRef.current;
+        if (element) element.scrollTop = element.scrollHeight;
+      }, 20);
+    } else {
+      setLoadingHistory(true);
+      setHistoryError(false);
+    }
+
+    try {
+      const data = await getConversation(conversationId);
+      const msgs = data?.messages || [];
+      setConversationTitle(data?.title || "Conversation");
+      setMessages(msgs);
+      saveCachedConversation(conversationId, msgs);
+      if (!cached) {
+        isAtBottomRef.current = true;
+        window.setTimeout(() => {
+          const element = scrollRef.current;
+          if (element) element.scrollTop = element.scrollHeight;
+        }, 60);
+      }
+    } catch (error) {
+      if (!cached) {
+        setHistoryError(true);
+        handleApiError(error);
+      }
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
   useEffect(() => {
     if (skipLoadRef.current) { skipLoadRef.current = false; return; }
-    if (!id) { setMessages([]); setConversationTitle(""); setHistoryError(false); return; }
-    loadHistory(id);
-  }, [id]);
+    const frame = requestAnimationFrame(() => {
+      if (!id) {
+        setMessages([]);
+        setConversationTitle("");
+        setHistoryError(false);
+        return;
+      }
+      loadHistory(id);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [id, loadHistory]);
 
   useEffect(() => {
     if (!pendingQuestionScrollRef.current || !latestQuestionRef.current || !scrollRef.current) return;
@@ -1230,66 +1264,72 @@ export default function ChatPage() {
     return () => cancelAnimationFrame(frame);
   }, [liveStream?.text]);
 
-useEffect(() => {
+  useEffect(() => {
     if (!liveStream || !liveStream.done) return;
     if (committedRef.current.has(liveStream.streamId)) return;
     committedRef.current.add(liveStream.streamId);
 
-    const conversationId = liveStream.donePayload?.conversationId || id;
-    if (liveStream.text) {
-      setMessages((previous) => {
-        const last = previous[previous.length - 1];
-        const alreadyCommitted = last
-          && (last.role === "ASSISTANT" || last.role === "assistant")
-          && last.content === liveStream.text;
-        const next = alreadyCommitted
-          ? previous
-          : [...previous, { role: "ASSISTANT", content: liveStream.text }];
-        saveCachedConversation(conversationId, next);
-        return next;
-      });
-    }
-
-    if (liveStream.donePayload && setWallet && liveStream.donePayload.remainingTokens != null) {
-      const remainingTokens = Number(liveStream.donePayload.remainingTokens);
-      setWallet((previous) => ({ ...previous, remainingTokens }));
-      if (remainingTokens <= 0) {
-        setModels((current) => {
-          const next = current.map((model) => model.premium
-            ? { ...model, locked: true, lockedReason: "Add credits to use this model" }
-            : model);
-          saveCachedModels(next);
+    let reconcileTimer = null;
+    let clearTimer = null;
+    const frame = requestAnimationFrame(() => {
+      const conversationId = liveStream.donePayload?.conversationId || id;
+      if (liveStream.text) {
+        setMessages((previous) => {
+          const last = previous[previous.length - 1];
+          const alreadyCommitted = last
+            && (last.role === "ASSISTANT" || last.role === "assistant")
+            && last.content === liveStream.text;
+          const next = alreadyCommitted
+            ? previous
+            : [...previous, { role: "ASSISTANT", content: liveStream.text }];
+          saveCachedConversation(conversationId, next);
           return next;
         });
       }
-    }
-    if (liveStream.donePayload?.tokensExhausted) setRechargeOpen(true);
 
-    const reconcileTimer = window.setTimeout(async () => {
-      if (!conversationId) return;
-      try {
-        const data = await getConversation(conversationId, true);
-        const serverMessages = Array.isArray(data?.messages) ? data.messages : [];
-        if (!serverMessages.length) return;
-        setMessages((current) => {
-          const lastAssistant = (items) => [...items].reverse().find((message) => message.role === "ASSISTANT" || message.role === "assistant");
-          const serverAnswer = lastAssistant(serverMessages)?.content || "";
-          const localAnswer = lastAssistant(current)?.content || "";
-          const serverIsMoreComplete = serverMessages.length > current.length || serverAnswer.length > localAnswer.length;
-          if (!serverIsMoreComplete) return current;
-          saveCachedConversation(conversationId, serverMessages);
-          return serverMessages;
-        });
-      } catch {
-        // The streamed text remains visible even if reconciliation is temporarily unavailable.
+      if (liveStream.donePayload && setWallet && liveStream.donePayload.remainingTokens != null) {
+        const remainingTokens = Number(liveStream.donePayload.remainingTokens);
+        setWallet((previous) => ({ ...previous, remainingTokens }));
+        if (remainingTokens <= 0) {
+          setModels((current) => {
+            const next = current.map((model) => model.premium
+              ? { ...model, locked: true, lockedReason: "Add credits to use this model" }
+              : model);
+            saveCachedModels(next);
+            return next;
+          });
+        }
       }
-    }, 300);
+      if (liveStream.donePayload?.tokensExhausted) setRechargeOpen(true);
 
-    const clearTimer = window.setTimeout(() => {
-      clearStream(streamKey);
-      setActiveKey(conversationId || tempKey);
-    }, 700);
+      reconcileTimer = window.setTimeout(async () => {
+        if (!conversationId) return;
+        try {
+          const data = await getConversation(conversationId, true);
+          const serverMessages = Array.isArray(data?.messages) ? data.messages : [];
+          if (!serverMessages.length) return;
+          setMessages((current) => {
+            const lastAssistant = (items) => [...items].reverse().find((message) => message.role === "ASSISTANT" || message.role === "assistant");
+            const serverAnswer = lastAssistant(serverMessages)?.content || "";
+            const localAnswer = lastAssistant(current)?.content || "";
+            const serverIsMoreComplete = serverMessages.length > current.length || serverAnswer.length > localAnswer.length;
+            if (!serverIsMoreComplete) return current;
+            saveCachedConversation(conversationId, serverMessages);
+            return serverMessages;
+          });
+        } catch {
+          // The streamed text remains visible even if reconciliation is temporarily unavailable.
+        }
+      }, 300);
+
+      clearTimer = window.setTimeout(() => {
+        clearStream(streamKey);
+        setActiveKey(conversationId || tempKey);
+      }, 700);
+    });
+
     return () => {
+      cancelAnimationFrame(frame);
       window.clearTimeout(reconcileTimer);
       window.clearTimeout(clearTimer);
     };
@@ -1297,19 +1337,21 @@ useEffect(() => {
 
   useEffect(() => {
     if (!liveStream?.error) return;
-    const code = liveStream.error.code;
-    const hasText = !!liveStream.text;
+    const frame = requestAnimationFrame(() => {
+      const code = liveStream.error.code;
+      const hasText = !!liveStream.text;
 
-    if (code === "NO_TOKENS" || code === "MODEL_LOCKED") {
-      setErrorBanner(code);
-      setRechargeOpen(true);
-      return;
-    }
-    if (hasText) return;
-    if (code === "RATE_LIMIT" || code === "GROQ_BUSY") setErrorBanner(code);
-    else setErrorBanner("GENERAL");
+      if (code === "NO_TOKENS" || code === "MODEL_LOCKED") {
+        setErrorBanner(code);
+        setRechargeOpen(true);
+        return;
+      }
+      if (hasText) return;
+      if (code === "RATE_LIMIT" || code === "GROQ_BUSY") setErrorBanner(code);
+      else setErrorBanner("GENERAL");
+    });
+    return () => cancelAnimationFrame(frame);
   }, [liveStream?.error, liveStream?.text]);
-
   const STALL_TIMEOUT_MS = 25000;
 
   const reconcileStalledStream = useCallback(async (key) => {
@@ -1387,39 +1429,6 @@ useEffect(() => {
     el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
   }
 
-  function scrollToBottomInstant() {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }
-
-  async function loadHistory(conversationId) {
-    const cached = loadCachedConversation(conversationId);
-    if (cached && cached.length) {
-      setMessages(cached);
-      setHistoryError(false);
-      isAtBottomRef.current = true;
-      setTimeout(scrollToBottomInstant, 20);
-    } else {
-      setLoadingHistory(true);
-      setHistoryError(false);
-    }
-
-    try {
-      const data = await getConversation(conversationId);
-      const msgs = data?.messages || [];
-      setConversationTitle(data?.title || "Conversation");
-      setMessages(msgs);
-      saveCachedConversation(conversationId, msgs);
-      if (!cached) {
-        isAtBottomRef.current = true;
-        setTimeout(scrollToBottomInstant, 60);
-      }
-    } catch (e) {
-      if (!cached) { setHistoryError(true); handleApiError(e); }
-    } finally {
-      setLoadingHistory(false);
-    }
-  }
 
   const handleSend = useCallback((textOverride) => {
     if (currentModel?.locked) {
@@ -1642,7 +1651,7 @@ useEffect(() => {
                     <span>Thinking</span><i /><i /><i />
                   </div>
                 )}
-                {liveStream && liveStream.text && !committedRef.current.has(liveStream?.streamId) && (
+                {liveStream && liveStream.text && !liveStreamCommitted && (
                   <div className="msg-block">
                     <MessageRow
                       role="ASSISTANT"
@@ -1729,7 +1738,7 @@ useEffect(() => {
                 <ModelSelector
                   models={models}
                   selectedId={selectedModelId}
-                  onSelect={setSelectedModelId}
+                  onSelect={handleModelSelect}
                   onLocked={() => { setErrorBanner("MODEL_LOCKED"); setRechargeOpen(true); }}
                   disabled={isBusy}
                   compact={isMobile}

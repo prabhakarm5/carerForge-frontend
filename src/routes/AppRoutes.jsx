@@ -137,7 +137,7 @@ const ROUTE_TITLES = {
     "/settings": "Settings",
     "/history": "History",
     "/bookmarks": "Bookmarks",
-    "/pdf-ai": "PDF AI",
+
 
     "/docs/user": "User Documentation",
     "/docs/developer": "Developer Documentation",
@@ -339,10 +339,6 @@ export default function AppRoutes() {
                     <Route
                         path="/bookmarks"
                         element={<h1 className="p-10 text-white">Bookmarks</h1>}
-                    />
-                    <Route
-                        path="/pdf-ai"
-                        element={<h1 className="p-10 text-white">PDF AI</h1>}
                     />
                 </Route>
 

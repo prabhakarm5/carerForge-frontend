@@ -8,6 +8,22 @@ export async function getLiveInterviewToken(payload) {
   return response.data;
 }
 
+export async function extractInterviewContext(file, model = "", onProgress, contextType = "JOB_DESCRIPTION") {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (model) formData.append("model", model);
+  formData.append("contextType", contextType);
+  const response = await axiosInstance.post(API.INTERVIEWS.EXTRACT_CONTEXT, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: INTERVIEW_TIMEOUT_MS,
+    onUploadProgress: (event) => {
+      if (!event.total || !onProgress) return;
+      onProgress(Math.min(55, Math.round((event.loaded / event.total) * 55)));
+    },
+  });
+  return response.data;
+}
+
 export async function getInterviews() {
   const response = await axiosInstance.get(API.INTERVIEWS.GET_ALL);
   return response.data;

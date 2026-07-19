@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback, memo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  Plus, LayoutDashboard, MessageSquare, Image, FileText, Mail, Globe, File, BriefcaseBusiness, Video,
+  Plus, LayoutDashboard, MessageSquare, Image, FileText, Mail, BriefcaseBusiness, Video,
   Wallet, Settings, LogOut, Sparkles, X, Search, MoreHorizontal,
   Pencil, Archive, Trash2, Check, RotateCcw, ChevronRight, ChevronUp,
   PanelLeftClose, PanelLeftOpen, User, Zap, Crown, Star, AlertTriangle, ChevronLeft, LifeBuoy, Gift,
@@ -41,8 +41,6 @@ const navItems = [
   { icon: Mail,            text: "Cover Letter", path: "/cover-letter", color: "#22d3ee", bg: "rgba(34,211,238,0.12)" },
   { icon: Video,           text: "Interview", path: "/interview", color: "#34d399", bg: "rgba(52,211,153,0.12)" },
   { icon: BriefcaseBusiness, text: "Live Jobs", path: "/jobs",            color: "#fbbf24", bg: "rgba(251,191,36,0.12)"  },
-  { icon: Globe,           text: "Website AI",  path: "/website",         color: "#38bdf8", bg: "rgba(56,189,248,0.12)"  },
-  { icon: File,            text: "PDF AI",      path: "/pdf-ai",          color: "#a78bfa", bg: "rgba(167,139,250,0.12)" },
 ];
 
 function groupByDate(chats) {
@@ -669,7 +667,8 @@ function Sidebar({ sidebarOpen, setSidebarOpen, onExpandedChange, wallet, refres
           // tha har frame pe jab sidebar collapse/expand hota tha.
           transition: `width 200ms ${EASE}, transform 220ms ${EASE}`,
           willChange: "width, transform",
-          contain: "layout style paint",
+          // Keep layout isolation, but do not paint-clip the collapsed avatar menu.
+          contain: "layout style",
         }}
       >
 

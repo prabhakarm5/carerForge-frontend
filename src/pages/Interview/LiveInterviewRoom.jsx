@@ -33,11 +33,11 @@ function formatDuration(seconds) {
 const controlClass = "grid h-[45px] w-[52px] place-content-center justify-items-center gap-1 rounded-lg border border-slate-700 bg-[#111a27] text-slate-300 transition hover:border-slate-500 hover:bg-[#162235] disabled:opacity-30 md:h-[52px] md:w-[62px]";
 
 /**
- * Maya's avatar panel.
- * Movement is driven entirely through refs + a single requestAnimationFrame
+ * Maya's interviewer panel.
+ * Whole-frame motion is driven through refs + a single requestAnimationFrame
  * loop instead of React state, so the "speaking" animation stays perfectly
- * smooth at 60fps and never triggers a re-render of this component (or its
- * siblings) on every audio frame. React only re-renders this when `status`
+ * smooth without pasting duplicate mouth or jaw layers over the portrait. It never
+ * triggers sibling re-renders on audio frames. React only re-renders when `status`
  * changes (a handful of times per interview), never on every level tick.
  */
 const InterviewerPanel = memo(function InterviewerPanel({ status, outputLevelRef }) {
@@ -74,7 +74,6 @@ const InterviewerPanel = memo(function InterviewerPanel({ status, outputLevelRef
           : "none";
       }
 
-
       barRefs.current.forEach((el, i) => {
         if (!el) return;
         const base = BAR_HEIGHTS[i] || 10;
@@ -92,7 +91,7 @@ const InterviewerPanel = memo(function InterviewerPanel({ status, outputLevelRef
     <section className={`relative h-full min-h-0 overflow-hidden rounded-lg border bg-[#0a1019] ${speaking ? "border-cyan-400" : "border-slate-700"}`}>
       <div
         ref={wrapRef}
-        className={`absolute -inset-1 overflow-hidden will-change-transform ${speaking ? "cf-interviewer-speaking" : "cf-interviewer-idle"}`}
+        className="absolute -inset-1 overflow-hidden will-change-transform"
       >
         {mediaUrl && !videoFailed ? (
           <video
@@ -109,7 +108,9 @@ const InterviewerPanel = memo(function InterviewerPanel({ status, outputLevelRef
             aria-label="Maya, professional CareerForge interviewer"
           />
         ) : (
-          <img className="h-full w-full object-cover object-[center_36%]" src="/images/ai-interviewer.png" alt="Maya, professional CareerForge interviewer" />
+          <div className="absolute inset-0 overflow-hidden" aria-label="Maya, voice-reactive CareerForge interviewer">
+            <img className="h-full w-full object-cover object-[center_36%]" src="/images/ai-interviewer.png" alt="Maya, professional CareerForge interviewer" />
+          </div>
         )}
         <div className="pointer-events-none absolute inset-0 border border-cyan-300/10 shadow-[inset_0_-48px_70px_rgba(3,6,10,.18)]" />
       </div>
@@ -179,13 +180,13 @@ const TranscriptPanel = memo(function TranscriptPanel({ transcript }) {
 });
 
 const FooterControls = memo(function FooterControls({
-  active, speakerEnabled, cameraEnabled, micEnabled, transcriptOpen,
+  active, speakerEnabled, speakerReady, cameraEnabled, micEnabled, transcriptOpen,
   onToggleSpeaker, onToggleCamera, onToggleMic, onToggleTranscript, onExit, onRejoin, joining, canRejoin,
 }) {
   return (
     <footer className="flex items-center justify-center gap-1.5 border-t border-slate-800 bg-[#090e16] p-1.5 md:gap-2 md:p-2.5">
       <button type="button" className={`${controlClass} ${speakerEnabled ? "text-cyan-50" : "bg-red-950/50 text-red-300"}`} onClick={onToggleSpeaker} disabled={!active} title={speakerEnabled ? "Mute speaker" : "Turn speaker on"}>
-        {speakerEnabled ? <Volume2 size={19} /> : <VolumeX size={19} />}<span className="text-[7px] md:text-[8px]">Speaker</span>
+        {speakerEnabled ? <Volume2 size={19} /> : <VolumeX size={19} />}<span className="text-[7px] md:text-[8px]">{speakerEnabled && !speakerReady ? "Enable" : "Speaker"}</span>
       </button>
       <button type="button" className={`${controlClass} ${cameraEnabled ? "text-cyan-50" : "bg-red-950/50 text-red-300"}`} onClick={onToggleCamera} disabled={!active} title={cameraEnabled ? "Turn camera off" : "Turn camera on"}>
         {cameraEnabled ? <Camera size={19} /> : <CameraOff size={19} />}<span className="text-[7px] md:text-[8px]">Camera</span>
@@ -210,6 +211,7 @@ const FooterControls = memo(function FooterControls({
 
 export default function LiveInterviewRoom({ config, onExit, onRecharge }) {
   const videoRef = useRef(null);
+  const speakerAudioRef = useRef(null);
   const [joining, setJoining] = useState(false);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
   const [seconds, setSeconds] = useState(0);
@@ -274,7 +276,7 @@ export default function LiveInterviewRoom({ config, onExit, onRecharge }) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play().catch(() => {});
       }
-      await live.start(stream, videoRef.current);
+      await live.start(stream, videoRef.current, speakerAudioRef.current);
     } catch (error) {
       if (error?.response?.status === 402) onRecharge?.();
       else if (error?.name === "NotAllowedError") {
@@ -324,7 +326,9 @@ export default function LiveInterviewRoom({ config, onExit, onRecharge }) {
   }, [live, seconds, config]);
 
   const toggleTranscript = useCallback(() => setTranscriptOpen((value) => !value), []);
-  const toggleSpeaker = useCallback(() => live.setSpeakerEnabled(!live.speakerEnabled), [live]);
+  const toggleSpeaker = useCallback(async () => {
+    await live.setSpeakerEnabled(!live.speakerEnabled);
+  }, [live]);
   const toggleMic = useCallback(() => live.setMicEnabled(!live.micEnabled), [live]);
 
   if (report) {
@@ -337,6 +341,7 @@ export default function LiveInterviewRoom({ config, onExit, onRecharge }) {
 
   return (
     <div className="grid h-full min-h-0 grid-rows-[48px_minmax(0,1fr)_66px] overflow-hidden bg-[#05080d] text-slate-50 md:grid-rows-[56px_minmax(0,1fr)_76px]">
+      <audio ref={speakerAudioRef} autoPlay playsInline className="hidden" aria-hidden="true" />
       <header className="flex min-w-0 items-center justify-between gap-3 border-b border-slate-800 bg-[#090e16] px-2.5 md:px-4">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,.11)]" />
@@ -378,6 +383,11 @@ export default function LiveInterviewRoom({ config, onExit, onRecharge }) {
                   <li className="rounded border border-slate-700 bg-[#0f1927] px-2 py-1 text-[8px] text-slate-400" key={item}>{item}</li>
                 ))}
               </ul>
+              {live.speakerSelectionSupported && (
+                <button className="mt-3 inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-slate-600 bg-[#111a27] px-3 text-[9px] font-bold text-slate-200" type="button" onClick={live.selectSpeakerOutput}>
+                  <Volume2 size={14} /> Choose audio output
+                </button>
+              )}
               <button className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-md bg-cyan-400 px-4 text-[11px] font-black text-[#04141a] disabled:opacity-50" type="button" onClick={join} disabled={joining || live.status === "connecting"}>
                 {joining || live.status === "connecting" ? <Loader2 size={17} className="animate-spin" /> : <Radio size={17} />}
                 {joining || live.status === "connecting" ? "Connecting..." : live.status === "idle" ? "Join interview" : "Rejoin interview"}
@@ -393,6 +403,7 @@ export default function LiveInterviewRoom({ config, onExit, onRecharge }) {
       <FooterControls
         active={active}
         speakerEnabled={live.speakerEnabled}
+        speakerReady={live.speakerReady}
         cameraEnabled={live.cameraEnabled}
         micEnabled={live.micEnabled}
         transcriptOpen={transcriptOpen}

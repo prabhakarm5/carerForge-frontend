@@ -1,262 +1,201 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
-  BookOpenCheck,
-  Bot,
-  Braces,
-  Brain,
+  BadgeCheck,
+  BriefcaseBusiness,
+  CheckCircle2,
   ChevronDown,
-  Cpu,
-  Eye,
-  Image,
-  Loader2,
+  FileSearch,
+  FileText,
+  Image as ImageIcon,
   MessageSquareText,
-  PlayCircle,
+  Mic2,
   Rocket,
-  ScanSearch,
   ShieldCheck,
   Sparkles,
-  TerminalSquare,
   WandSparkles,
-  Workflow,
   Zap,
 } from "lucide-react";
+
 import BrandLogo from "../../shared/BrandLogo";
 import { getPlans } from "../../services/planService";
 
-// Each feature is tagged with an accent so the grid reads as "one platform,
-// four capability tracks" (chat, code, visual, career-docs) instead of a
-// flat list of bullet points.
-const ACCENTS = {
-  chat: { grad: "from-cyan-400 to-blue-600", text: "text-cyan-300", ring: "ring-cyan-400/30" },
-  code: { grad: "from-violet-400 to-fuchsia-600", text: "text-violet-300", ring: "ring-violet-400/30" },
-  visual: { grad: "from-orange-400 to-amber-500", text: "text-orange-300", ring: "ring-orange-400/30" },
-  career: { grad: "from-emerald-400 to-teal-600", text: "text-emerald-300", ring: "ring-emerald-400/30" },
-};
-
-const features = [
-  { icon: MessageSquareText, title: "AI Career Chat", text: "Ask about resumes, interviews, DSA, or job strategy and get grounded answers in real time.", tone: "chat" },
-  { icon: Braces, title: "AI Coding Assistant", text: "Debug, refactor, or generate code with a model tuned for real engineering problems.", tone: "code" },
-  { icon: Eye, title: "Live Artifact Preview", text: "Code the AI writes opens in a side panel with an instant live preview — no copy-pasting.", tone: "code" },
-  { icon: Brain, title: "Multiple AI Models", text: "Switch between chat, reasoning, coding, and vision models depending on the task.", tone: "chat" },
-  { icon: WandSparkles, title: "Resume Builder", text: "Generate ATS-ready summaries, skills, and project bullet points in seconds.", tone: "career" },
-  { icon: ScanSearch, title: "ATS Optimization", text: "Improve keyword matching, structure, and role alignment before you apply.", tone: "career" },
-  { icon: Image, title: "AI Image Tools", text: "Generate creative or professional visuals straight from a prompt.", tone: "visual" },
-  { icon: ShieldCheck, title: "Secure by Design", text: "JWT auth, OTP verification, wallet ledgering, and Razorpay-backed payments.", tone: "career" },
-];
-
-const models = ["Llama 3.3 70B", "DeepSeek R1", "Vision Models", "OpenRouter", "Gemini Image", "Coding Models", "Resume AI", "PDF AI"];
-
-const workflow = [
-  "Create a free account",
-  "Claim 100 credits instantly",
-  "Pick chat, code, resume, image, or PDF tools",
-  "Choose the best-fit AI model for the task",
-  "Generate, preview, and pick up again from your dashboard",
-];
-
 const fallbackPlans = [
-  { id: "free", name: "Starter", price: 0, tokens: 100, description: "Free credits for testing AI chat, coding, and resume tools." },
-  { id: "pro", name: "Career Pro", price: 299, tokens: 15000, description: "Best for resume building, ATS, coding help, and interview prep." },
-  { id: "max", name: "Offer Mode", price: 799, tokens: 50000, description: "For heavy AI usage across documents, images, and advanced tools." },
+  { id: "starter", name: "Starter", price: 0, tokens: 100, description: "Explore the core career workspace." },
+  { id: "career-pro", name: "Career Pro", price: 299, tokens: 15000, description: "Resume, interview, chat, and job-search usage." },
+  { id: "offer-mode", name: "Offer Mode", price: 799, tokens: 50000, description: "Higher-volume preparation across every AI workspace." },
 ];
 
-const faqs = [
-  ["Do I get free credits after signup?", "Yes — every new account receives 100 free credits instantly, no card required."],
-  ["Can I use it for coding help?", "Yes. There's a dedicated coding model, and any code it writes opens in a live artifact preview."],
-  ["Can I switch between AI models?", "Yes — chat, reasoning, coding, vision, and image models are all available from the same workspace."],
-  ["Is this only a resume tool?", "No — it's a full AI career workspace covering chat, coding, resumes, ATS, and images in one place."],
+const workspaces = [
+  {
+    id: "chat",
+    eyebrow: "Career Chat",
+    title: "A conversation that keeps the same context tomorrow.",
+    description: "Streamed answers, durable conversation memory, model choice, voice input, and a dedicated artifact panel for code and documents.",
+    image: "/features/chat.png",
+    alt: "CareerForge AI career chat workspace",
+    icon: MessageSquareText,
+    color: "text-cyan-300",
+    bar: "bg-cyan-400",
+    route: "/chat",
+    points: ["PostgreSQL-backed history after Redis expiry", "Live code and document artifacts", "Compact mobile composer"],
+  },
+  {
+    id: "resume",
+    eyebrow: "Resume Studio",
+    title: "Analyze, improve, match, and download an ATS resume.",
+    description: "Upload a resume, review ATS gaps, compare it with a job description, continue with a bilingual coach, and generate a downloadable result.",
+    image: "/features/resume.png",
+    alt: "CareerForge AI resume analysis workspace",
+    icon: FileSearch,
+    color: "text-emerald-300",
+    bar: "bg-emerald-400",
+    route: "/resume?new=1",
+    points: ["PDF, DOCX, image, and pasted text intake", "ATS and job-match scoring", "Generated PDF download"],
+  },
+  {
+    id: "interview",
+    eyebrow: "Interview Room",
+    title: "Practice against your role, resume, and real job brief.",
+    description: "Choose written or live practice, attach a resume, upload a PDF or image job description, and receive evidence-based scoring and follow-ups.",
+    image: "/features/interview.png",
+    alt: "CareerForge AI interview practice setup",
+    icon: Mic2,
+    color: "text-amber-300",
+    bar: "bg-amber-300",
+    route: "/interview",
+    points: ["English, Hindi, and automatic language matching", "Audio-reactive human interviewer", "PDF and image job-description extraction"],
+  },
+  {
+    id: "image",
+    eyebrow: "Image Studio",
+    title: "Create a new visual or transform an existing image.",
+    description: "Pick a configured model, write or speak a prompt, use image-to-image editing, and manage every result from searchable history.",
+    image: "/features/image-studio.png",
+    alt: "CareerForge AI image generation workspace",
+    icon: ImageIcon,
+    color: "text-rose-300",
+    bar: "bg-rose-400",
+    route: "/image-generator?new=1",
+    points: ["Text-to-image and image-to-image", "Favorites, regeneration, and download", "Provider-safe server-side keys"],
+  },
+  {
+    id: "jobs",
+    eyebrow: "Live Jobs",
+    title: "Move from preparation to current opportunities.",
+    description: "Search current roles with focused filters and apply links, then return to the same career workspace for resume and interview preparation.",
+    image: "/features/jobs.png",
+    alt: "CareerForge AI live job search workspace",
+    icon: BriefcaseBusiness,
+    color: "text-blue-300",
+    bar: "bg-blue-400",
+    route: "/jobs",
+    points: ["Current job-provider results", "Role and location filters", "Direct apply workflow"],
+  },
 ];
 
-function GlowPanel({ children, className = "", accent }) {
+const faq = [
+  ["Does every new account receive free credits?", "Yes. A verified new user starts with 100 credits, and paid plans or eligible promo rewards add more."],
+  ["What happens when credits reach zero?", "The same recharge panel opens from chat, resume, interview, image, and other paid AI actions. You can apply a promo before choosing a plan."],
+  ["Will old chats still remember context?", "The database remains the source of truth. If the Redis memory cache expires, bounded conversation history is rebuilt before the next model request."],
+  ["Can interview practice use a real job description?", "Yes. Paste it directly or upload a PDF, PNG, JPG, or WebP file from the interview setup."],
+];
+
+function SectionHeading({ eyebrow, title, text }) {
   return (
-    <div
-      className={`rounded-[1.75rem] border border-white/10 bg-white/[0.06] p-6 shadow-[0_20px_60px_-35px_rgba(0,0,0,0.9)] ${
-        accent ? `ring-1 ${ACCENTS[accent].ring}` : ""
-      } ${className}`}
-    >
-      {children}
+    <div className="max-w-3xl">
+      <p className="m-0 text-xs font-black uppercase text-cyan-300">{eyebrow}</p>
+      <h2 className="mt-3 text-3xl font-black leading-tight text-white sm:text-4xl lg:text-5xl">{title}</h2>
+      <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-400 sm:text-base">{text}</p>
     </div>
   );
 }
 
-function SectionTitle({ badge, title, text, accent = "text-cyan-300" }) {
+function ProductBand({ workspace, index }) {
+  const Icon = workspace.icon;
+  const mediaFirst = index % 2 === 0;
   return (
-    <div className="mx-auto max-w-3xl text-center">
-      <p className={`text-sm font-black uppercase tracking-[0.28em] ${accent}`}>{badge}</p>
-      <h2 className="mt-4 text-4xl font-black leading-tight text-white md:text-6xl">{title}</h2>
-      <p className="mt-5 text-base leading-8 text-slate-300 md:text-lg">{text}</p>
-    </div>
-  );
-}
+    <article className="border-t border-white/10 py-10 sm:py-14 lg:py-16">
+      <div className="mx-auto grid max-w-[1220px] items-center gap-7 px-4 sm:px-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(320px,.92fr)] lg:gap-12 lg:px-8">
+        <figure className={`${mediaFirst ? "lg:order-1" : "lg:order-2"} m-0 min-w-0 overflow-hidden rounded-lg border border-white/15 bg-[#070b12] shadow-[0_24px_70px_rgba(0,0,0,.34)]`}>
+          <div className={`h-1.5 w-full ${workspace.bar}`} />
+          <img src={workspace.image} alt={workspace.alt} loading={index < 2 ? "eager" : "lazy"} className="block aspect-[16/10] h-auto w-full object-cover object-top" />
+        </figure>
 
-// Signature element: a split "workspace" mockup — chat on the left, a code
-// tab with a live preview on the right — mirroring the artifact-panel
-// experience the product actually delivers, instead of a generic chat bubble.
-function WorkspaceMockup() {
-  return (
-    <div className="relative">
-      <div className="absolute -inset-4 rounded-[2.5rem] bg-gradient-to-r from-cyan-400 via-violet-500 to-orange-400 opacity-25 blur-2xl" />
-
-      <div className="relative overflow-hidden rounded-[1.75rem] border border-white/15 bg-[#0b0a16] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-cyan-400 to-fuchsia-500">
-              <Bot size={20} />
-            </div>
-            <div>
-              <p className="text-sm font-black text-white">CareerForge AI</p>
-              <p className="text-xs font-bold text-cyan-300">chat + code + live preview</p>
-            </div>
+        <div className={mediaFirst ? "lg:order-2" : "lg:order-1"}>
+          <div className={`inline-flex items-center gap-2 text-xs font-black uppercase ${workspace.color}`}>
+            <Icon size={16} /> {workspace.eyebrow}
           </div>
-          <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-black text-emerald-300">Online</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2">
-          <div className="space-y-3 border-b border-white/10 p-4 sm:border-b-0 sm:border-r">
-            <p className="px-1 text-[11px] font-black uppercase tracking-wider text-slate-500">Chat</p>
-            <div className="ml-auto max-w-[92%] rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3.5 py-2.5 text-[13px] font-semibold text-white">
-              Build a countdown timer component in React.
-            </div>
-            <div className="max-w-[95%] rounded-2xl bg-white/10 px-3.5 py-2.5 text-[13px] leading-6 text-slate-200">
-              Done — here's the component with a live preview on the right.
-            </div>
-            <div className="ml-auto max-w-[85%] rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 px-3.5 py-2.5 text-[13px] font-semibold text-white">
-              Add a reset button too.
-            </div>
-          </div>
-
-          <div className="flex flex-col p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-black text-slate-300">
-                <TerminalSquare size={13} /> Code
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-cyan-400 to-violet-500 px-2.5 py-1 text-[11px] font-black text-white">
-                <PlayCircle size={13} /> Preview
-              </span>
-            </div>
-            <div className="flex-1 rounded-xl bg-black/40 p-3 font-mono text-[11px] leading-5 text-slate-400">
-              <p><span className="text-fuchsia-400">function</span> <span className="text-cyan-300">Countdown</span>() {"{"}</p>
-              <p className="pl-3 text-slate-500">const [t, setT] = useState(60);</p>
-              <p className="pl-3 text-slate-500">...</p>
-              <p>{"}"}</p>
-            </div>
-            <div className="mt-3 grid place-items-center rounded-xl border border-dashed border-white/15 bg-white/5 py-4">
-              <span className="text-2xl font-black text-white">00:59</span>
-              <span className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">live preview</span>
-            </div>
-          </div>
+          <h3 className="mt-3 text-2xl font-black leading-tight text-white sm:text-3xl">{workspace.title}</h3>
+          <p className="mt-4 text-sm leading-7 text-slate-400 sm:text-base">{workspace.description}</p>
+          <ul className="mt-5 grid gap-2.5">
+            {workspace.points.map((point) => (
+              <li key={point} className="flex items-start gap-2.5 text-sm text-slate-300">
+                <CheckCircle2 size={16} className={`mt-0.5 shrink-0 ${workspace.color}`} />
+                <span>{point}</span>
+              </li>
+            ))}
+          </ul>
+          <Link to={workspace.route} className="mt-6 inline-flex h-10 items-center gap-2 rounded-lg border border-white/15 bg-white/[0.06] px-4 text-sm font-black text-white hover:border-cyan-300/50 hover:bg-white/10">
+            Open {workspace.eyebrow} <ArrowRight size={16} />
+          </Link>
         </div>
       </div>
-    </div>
+    </article>
   );
 }
 
 function PlansSection() {
   const [plans, setPlans] = useState(fallbackPlans);
   const [loading, setLoading] = useState(true);
-  const [errored, setErrored] = useState(false);
+  const [usingFallback, setUsingFallback] = useState(false);
 
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
-
-    // ✅ FIX — pehle getPlans() ka koi timeout nahi tha. Agar backend
-    // slow/unreachable hota to request kabhi resolve/reject nahi hoti
-    // thi, isliye "loading" hamesha true reh jaata tha aur poora page
-    // "fas" gaya jaisa lagta (infinite spinner, koi fallback nahi).
-    //
-    // Ab 6 second ka hard timeout hai — usme response na aaye to
-    // request abort ho jaati hai aur fallback plans turant dikha diye
-    // jaate hain, page kabhi atakta nahi.
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
-
+    const timeout = window.setTimeout(() => controller.abort(), 5000);
     getPlans({ signal: controller.signal })
-      .then((data) => {
+      .then((items) => {
         if (!active) return;
-        const list = Array.isArray(data) ? data.filter((plan) => plan.active !== false) : [];
-        setPlans(list.length ? list : fallbackPlans);
+        const available = Array.isArray(items) ? items.filter((item) => item.active !== false) : [];
+        setPlans(available.length ? available.slice(0, 3) : fallbackPlans);
       })
       .catch(() => {
-        if (!active) return;
-        setErrored(true);
-        setPlans(fallbackPlans);
+        if (active) {
+          setPlans(fallbackPlans);
+          setUsingFallback(true);
+        }
       })
       .finally(() => {
-        clearTimeout(timeoutId);
+        window.clearTimeout(timeout);
         if (active) setLoading(false);
       });
-
     return () => {
       active = false;
       controller.abort();
-      clearTimeout(timeoutId);
+      window.clearTimeout(timeout);
     };
   }, []);
 
   const visiblePlans = useMemo(() => plans.slice(0, 3), [plans]);
-  const accentByIndex = ["from-cyan-400 to-blue-600", "from-orange-500 to-fuchsia-600", "from-emerald-400 to-teal-600"];
-
   return (
-    <section id="pricing" className="px-5 py-24">
-      <div className="mx-auto max-w-7xl">
-        <SectionTitle
-          badge="Credits & Plans"
-          title="Start free, upgrade when you grow."
-          text="Start with free credits, then pick a plan for AI chat, coding, resumes, images, and PDF tools."
-        />
-
-        {loading && (
-          <div className="mt-8 flex justify-center">
-            <Loader2 className="animate-spin text-white" />
-          </div>
-        )}
-
-        {errored && !loading && (
-          <p className="mt-6 text-center text-sm font-semibold text-orange-300">
-            Live pricing is unreachable right now — showing standard plans.
-          </p>
-        )}
-
-        <div className="mt-14 grid gap-6 md:grid-cols-3">
-          {visiblePlans.map((plan, index) => (
-            <div
-              key={plan.id || plan.name}
-              className={`relative rounded-[1.75rem] border p-7 transition-transform duration-150 hover:-translate-y-1 ${
-                index === 1
-                  ? "border-fuchsia-400/60 bg-gradient-to-b from-[#161029] to-[#0d0a19] shadow-[0_25px_70px_-30px_rgba(217,70,239,0.5)]"
-                  : "border-white/10 bg-white/[0.06]"
-              }`}
-            >
-              {index === 1 && (
-                <span className="absolute -top-3 left-7 inline-flex rounded-full bg-gradient-to-r from-orange-500 to-fuchsia-600 px-4 py-1 text-xs font-black uppercase text-white">
-                  Most Popular
-                </span>
-              )}
-
-              <h3 className="text-2xl font-black text-white">{plan.name}</h3>
-
-              <div className="mt-5 flex items-end gap-2">
-                <span className={`bg-gradient-to-r ${accentByIndex[index % 3]} bg-clip-text text-5xl font-black text-transparent`}>
-                  ₹{plan.price ?? 0}
-                </span>
-                <span className="mb-2 text-sm text-slate-400">one-time</span>
-              </div>
-
-              <p className="mt-5 min-h-20 text-sm leading-7 text-slate-300">{plan.description}</p>
-
-              <div className="mt-6 rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-yellow-300">
-                {(plan.tokens || 0).toLocaleString()} credits included
-              </div>
-
-              <Link
-                to={`/wallet${plan.id ? `?plan=${plan.id}` : ""}`}
-                className={`mt-7 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-4 text-sm font-black text-white transition-transform duration-150 hover:-translate-y-0.5 bg-gradient-to-r ${accentByIndex[index % 3]}`}
-              >
-                Choose plan <ArrowRight size={18} />
+    <section id="pricing" className="border-y border-white/10 bg-[#0b111b] py-16 sm:py-20">
+      <div className="mx-auto max-w-[1180px] px-4 sm:px-6 lg:px-8">
+        <SectionHeading eyebrow="Credits" title="Start free. Recharge only when you need more." text="One wallet works across every AI workspace, and promo eligibility is verified by the backend." />
+        {usingFallback && <p className="mt-4 text-xs text-amber-300">Live pricing is temporarily unavailable. Standard plan examples are shown.</p>}
+        <div className="mt-9 grid gap-4 md:grid-cols-3">
+          {loading ? Array.from({ length: 3 }).map((_, index) => <div key={index} className="h-52 animate-pulse rounded-lg border border-white/10 bg-white/[0.04]" />) : visiblePlans.map((plan, index) => (
+            <article key={plan.id || plan.name} className="relative rounded-lg border border-white/10 bg-[#080d15] p-5">
+              <span className={`absolute left-0 top-0 h-1 w-full ${index === 0 ? "bg-cyan-400" : index === 1 ? "bg-amber-300" : "bg-emerald-400"}`} />
+              <h3 className="text-lg font-black text-white">{plan.name}</h3>
+              <p className="mt-2 min-h-12 text-sm leading-6 text-slate-500">{plan.description}</p>
+              <p className="mt-5 text-3xl font-black text-white">{Number(plan.price || 0) === 0 ? "Free" : <>{"\u20B9"}{Number(plan.price).toLocaleString()}</>}</p>
+              <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-cyan-300"><Zap size={13} /> {Number(plan.tokens || 0).toLocaleString()} credits</p>
+              <Link to={Number(plan.price || 0) === 0 ? "/register" : `/login?next=${encodeURIComponent(`/wallet?plan=${plan.id}`)}`} className="mt-5 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-white px-4 text-sm font-black text-slate-950">
+                {Number(plan.price || 0) === 0 ? "Create free account" : "Choose after login"} <ArrowRight size={15} />
               </Link>
-            </div>
+            </article>
           ))}
         </div>
       </div>
@@ -268,221 +207,110 @@ export default function HomePage() {
   const [openFaq, setOpenFaq] = useState(0);
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#05040c] text-white">
-      <section className="relative px-5 pb-24 pt-20">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(34,211,238,0.30),transparent_30%),radial-gradient(circle_at_85%_15%,rgba(167,139,250,0.30),transparent_32%),radial-gradient(circle_at_50%_85%,rgba(249,115,22,0.22),transparent_35%)]" />
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:52px_52px] opacity-20" />
-
-        <div className="relative mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[1.05fr_.95fr]">
-          <div>
-            <div className="mb-7 inline-flex items-center gap-3 rounded-full border border-white/15 bg-white/10 px-5 py-3 text-sm font-black text-cyan-100">
-              <Sparkles size={18} className="text-yellow-300" />
-              Chat • Code • Live Preview • Resume • ATS • Image
+    <main className="min-h-screen overflow-x-hidden bg-[#060a12] text-white">
+      <section className="relative flex min-h-[calc(100svh-88px)] max-h-[880px] items-end overflow-hidden border-b border-white/10">
+        <img src="/images/career-hero-v2.png" alt="Professional preparing for a career interview" className="absolute inset-0 h-full w-full object-cover object-[64%_center] sm:object-center" />
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#040913] via-[#040913e8] to-transparent" />
+        <div className="relative mx-auto w-full max-w-[1320px] px-4 pb-14 pt-28 sm:px-6 sm:pb-20 lg:px-8">
+          <div className="max-w-3xl">
+            <div className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/30 bg-black/40 px-3 py-2 text-xs font-black text-cyan-200 backdrop-blur">
+              <Sparkles size={15} /> AI career operating system
             </div>
-
-            <h1 className="max-w-5xl text-5xl font-black leading-[1.02] md:text-7xl xl:text-8xl">
-              Build your career with{" "}
-              <span className="bg-gradient-to-r from-cyan-300 via-violet-300 to-orange-200 bg-clip-text text-transparent">
-                powerful AI.
-              </span>
-            </h1>
-
-            <p className="mt-8 max-w-3xl text-lg leading-8 text-slate-300 md:text-xl md:leading-9">
-              CareerForge AI is a full AI workspace: chat for career and coding help, an artifact
-              panel that renders a live preview of any code it writes, an ATS-ready resume builder,
-              and image generation — all in one place.
+            <h1 className="mt-5 text-[42px] font-black leading-none text-white sm:text-6xl lg:text-[80px]">CareerForge AI</h1>
+            <p className="mt-5 max-w-2xl text-base leading-8 text-slate-200 sm:text-lg">
+              Prepare, create, practice, and apply from one connected workspace with durable chat memory, ATS resume tools, live interviews, image creation, current jobs, and a shared credit wallet.
             </p>
-
-            <div className="mt-10 flex flex-col gap-4 sm:flex-row">
-              <Link
-                to="/register"
-                className="inline-flex items-center justify-center gap-3 rounded-3xl bg-gradient-to-r from-cyan-400 via-blue-500 to-fuchsia-600 px-8 py-5 text-base font-black text-white shadow-[0_20px_60px_rgba(56,189,248,0.25)] transition-transform duration-150 hover:-translate-y-1"
-              >
-                Start Free with 100 Credits <Rocket size={22} />
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              <Link to="/register" className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-cyan-400 px-6 text-sm font-black text-[#031318] hover:bg-cyan-300">
+                Start with 100 free credits <Rocket size={18} />
               </Link>
-
-              <Link
-                to="/login"
-                className="inline-flex items-center justify-center gap-3 rounded-3xl border border-white/15 bg-white/10 px-8 py-5 text-base font-black text-white transition-colors duration-150 hover:bg-white/15"
-              >
-                Login to Dashboard <ArrowRight size={22} />
-              </Link>
-            </div>
-
-            <div className="mt-10 grid max-w-3xl grid-cols-2 gap-4 md:grid-cols-4">
-              {[
-                ["100", "Free Credits"],
-                ["8+", "AI Tools"],
-                ["Multi", "AI Models"],
-                ["Live", "Code Preview"],
-              ].map(([num, label]) => (
-                <div key={label} className="rounded-3xl border border-white/10 bg-white/[0.06] p-5">
-                  <p className="text-3xl font-black text-white">{num}</p>
-                  <p className="mt-1 text-sm font-bold text-slate-400">{label}</p>
-                </div>
-              ))}
+              <a href="#features" className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-white/25 bg-black/35 px-6 text-sm font-black text-white backdrop-blur hover:bg-black/55">
+                Explore workspaces <ArrowRight size={18} />
+              </a>
             </div>
           </div>
-
-          <WorkspaceMockup />
         </div>
       </section>
 
-      <section id="features" className="px-5 py-24">
-        <div className="mx-auto max-w-7xl">
-          <SectionTitle
-            badge="Features"
-            title="One colorful AI platform for every career task."
-            text="Chat, coding, live previews, resumes, ATS, images, and a secure wallet — all in one clean workspace."
-          />
+      <section className="bg-[#0b111b]">
+        <div className="mx-auto grid max-w-[1220px] grid-cols-2 border-x border-white/10 sm:grid-cols-4">
+          {[["100", "Free starting credits"], ["5", "Connected AI workspaces"], ["1", "Shared secure wallet"], ["24/7", "History and access"]].map(([value, label], index) => (
+            <div key={label} className={`px-4 py-5 ${index < 3 ? "border-r border-white/10" : ""} ${index < 2 ? "max-sm:border-b" : ""}`}>
+              <strong className="block text-2xl font-black text-white">{value}</strong>
+              <span className="mt-1 block text-xs text-slate-500">{label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
 
-          <div className="mt-16 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {features.map(({ icon: Icon, title, text, tone }) => (
-              <GlowPanel key={title} accent={tone} className="transition-transform duration-150 hover:-translate-y-1">
-                <div className={`mb-6 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br ${ACCENTS[tone].grad}`}>
-                  <Icon size={26} />
-                </div>
-                <h3 className="text-xl font-black text-white">{title}</h3>
-                <p className="mt-3 text-sm leading-7 text-slate-300">{text}</p>
-              </GlowPanel>
+      <section id="features" className="px-4 pb-6 pt-16 sm:px-6 sm:pt-20 lg:px-8">
+        <div className="mx-auto max-w-[1220px]">
+          <SectionHeading eyebrow="Product workspaces" title="Everything new is visible before you sign in." text="These are verified screens from the running product, not generic illustrations." />
+        </div>
+      </section>
+
+      {workspaces.map((workspace, index) => <ProductBand key={workspace.id} workspace={workspace} index={index} />)}
+
+      <section className="border-t border-white/10 bg-[#0a0f18] py-16 sm:py-20">
+        <div className="mx-auto max-w-[1180px] px-4 sm:px-6 lg:px-8">
+          <SectionHeading eyebrow="One connected system" title="The supporting features are part of the same workflow." text="No separate account, disconnected history, or different payment flow for each tool." />
+          <div className="mt-9 grid gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              [FileText, "Cover Letter Studio", "Resume-grounded letters with editable PDF and DOCX export.", "text-emerald-300"],
+              [WandSparkles, "Artifact Preview", "Code and long documents open in a focused side panel.", "text-cyan-300"],
+              [ShieldCheck, "Secure Sessions", "In-memory access tokens and HttpOnly refresh cookies.", "text-blue-300"],
+              [BadgeCheck, "Promo and Wallet", "One recharge flow with backend-verified rewards.", "text-amber-300"],
+            ].map(([Icon, title, text, color]) => (
+              <article key={title} className="bg-[#080d15] p-5">
+                <Icon size={22} className={color} />
+                <h3 className="mt-4 text-base font-black text-white">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-500">{text}</p>
+              </article>
             ))}
-          </div>
-        </div>
-      </section>
-
-      <section id="workflow" className="px-5 py-24">
-        <div className="mx-auto max-w-7xl">
-          <div className="grid gap-8 lg:grid-cols-2">
-            <GlowPanel className="p-8">
-              <Workflow className="text-cyan-300" size={40} />
-              <h2 className="mt-5 text-4xl font-black text-white md:text-5xl">A simple user journey</h2>
-
-              <div className="mt-8 space-y-4">
-                {workflow.map((step, index) => (
-                  <div key={step} className="flex gap-4 rounded-2xl border border-white/10 bg-white/[0.05] p-4">
-                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-cyan-400 to-violet-500 text-sm font-black text-white">
-                      {index + 1}
-                    </div>
-                    <p className="pt-2 font-bold text-slate-100">{step}</p>
-                  </div>
-                ))}
-              </div>
-            </GlowPanel>
-
-            <GlowPanel className="p-8">
-              <Cpu className="text-orange-300" size={40} />
-              <h2 className="mt-5 text-4xl font-black text-white md:text-5xl">Multiple AI models</h2>
-              <p className="mt-5 text-base leading-8 text-slate-300">
-                Pick a fast model, a deep reasoning model, a coding model, or a vision model — whatever the task needs.
-              </p>
-
-              <div className="mt-8 flex flex-wrap gap-3">
-                {models.map((model) => (
-                  <span key={model} className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-white">
-                    {model}
-                  </span>
-                ))}
-              </div>
-            </GlowPanel>
           </div>
         </div>
       </section>
 
       <PlansSection />
 
-      <section id="docs" className="px-5 py-24">
-        <div className="mx-auto max-w-7xl">
-          <SectionTitle
-            badge="Documentation"
-            title="Clear docs for users and developers."
-            text="Everything from signup and credits to architecture and deployment, written down properly."
-          />
-
-          <div className="mt-14 grid gap-8 md:grid-cols-2">
-            {[
-              [BookOpenCheck, "User Documentation", "Signup, login, credits, AI chat, resume tools, wallet, and payments.", "/docs/user", "from-cyan-400 to-blue-500"],
-              [TerminalSquare, "Developer Documentation", "Architecture, Docker, AWS, Elastic Beanstalk, CI/CD, and environment setup.", "/docs/developer", "from-violet-400 to-fuchsia-500"],
-            ].map(([Icon, title, text, link, grad]) => (
-              <Link
-                key={title}
-                to={link}
-                className="rounded-[1.75rem] border border-white/10 bg-white/[0.06] p-8 transition-transform duration-150 hover:-translate-y-1"
-              >
-                <div className={`grid h-16 w-16 place-items-center rounded-3xl bg-gradient-to-br ${grad}`}>
-                  <Icon size={30} />
-                </div>
-                <h3 className="mt-6 text-3xl font-black text-white">{title}</h3>
-                <p className="mt-4 text-base leading-8 text-slate-300">{text}</p>
-                <span className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-black text-slate-950">
-                  Open docs <ArrowRight size={18} />
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="px-5 py-24">
-        <div className="mx-auto max-w-5xl">
-          <SectionTitle
-            badge="FAQ"
-            title="Questions before you start."
-            text="The things people usually want to know first."
-          />
-
-          <div className="mt-12 rounded-[1.75rem] border border-white/10 bg-white/[0.06] p-6">
-            {faqs.map(([q, a], index) => (
-              <div key={q} className="border-b border-white/10 py-5 last:border-0">
-                <button
-                  onClick={() => setOpenFaq(openFaq === index ? -1 : index)}
-                  className="flex w-full items-center justify-between gap-4 text-left"
-                >
-                  <span className="text-lg font-black text-white">{q}</span>
-                  <ChevronDown className={`shrink-0 text-slate-400 transition-transform duration-150 ${openFaq === index ? "rotate-180" : ""}`} />
+      <section className="py-16 sm:py-20">
+        <div className="mx-auto max-w-[940px] px-4 sm:px-6 lg:px-8">
+          <SectionHeading eyebrow="FAQ" title="Know the flow before you begin." text="Clear answers about credits, memory, and the new interview document flow." />
+          <div className="mt-8 border-t border-white/10">
+            {faq.map(([question, answer], index) => (
+              <div key={question} className="border-b border-white/10 py-1">
+                <button type="button" onClick={() => setOpenFaq(openFaq === index ? -1 : index)} className="flex min-h-16 w-full items-center justify-between gap-4 py-3 text-left text-sm font-black text-white sm:text-base">
+                  <span>{question}</span>
+                  <ChevronDown size={18} className={`shrink-0 text-slate-500 transition-transform ${openFaq === index ? "rotate-180" : ""}`} />
                 </button>
-
-                {openFaq === index && <p className="mt-4 max-w-3xl text-base leading-8 text-slate-300">{a}</p>}
+                {openFaq === index && <p className="mb-5 max-w-3xl text-sm leading-7 text-slate-400">{answer}</p>}
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="px-5 pb-24">
-        <div className="mx-auto max-w-7xl rounded-[1.75rem] border border-white/10 bg-gradient-to-r from-cyan-500 via-violet-600 to-orange-500 p-10 text-center shadow-2xl md:p-16">
-          <Zap className="mx-auto text-yellow-200" size={50} />
-          <h2 className="mt-6 text-4xl font-black text-white md:text-7xl">Start your AI career workspace today.</h2>
-          <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-white/90">
-            Create an account, claim 100 free credits, and start using the AI tools right away.
-          </p>
-
-          <div className="mt-10 flex flex-col justify-center gap-4 sm:flex-row">
-            <Link
-              to="/register"
-              className="inline-flex items-center justify-center gap-3 rounded-3xl bg-white px-8 py-5 text-base font-black text-slate-950 transition-transform duration-150 hover:-translate-y-1"
-            >
-              Claim 100 free credits <ArrowRight size={22} />
-            </Link>
-
-            <Link
-              to="/login"
-              className="inline-flex items-center justify-center gap-3 rounded-3xl border border-white/30 bg-white/10 px-8 py-5 text-base font-black text-white"
-            >
-              Login to dashboard
-            </Link>
+      <section className="border-y border-white/10 bg-cyan-400 py-12 text-[#031318]">
+        <div className="mx-auto flex max-w-[1180px] flex-col items-start justify-between gap-6 px-4 sm:px-6 lg:flex-row lg:items-center lg:px-8">
+          <div>
+            <p className="text-xs font-black uppercase">Ready when you are</p>
+            <h2 className="mt-2 text-3xl font-black sm:text-4xl">Build your next career move in CareerForge AI.</h2>
           </div>
+          <Link to="/register" className="inline-flex h-12 shrink-0 items-center gap-2 rounded-lg bg-[#06101a] px-6 text-sm font-black text-white">
+            Create free account <ArrowRight size={18} />
+          </Link>
         </div>
       </section>
 
-      <footer className="border-t border-white/10 px-5 py-10">
-        <div className="mx-auto flex max-w-7xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
+      <footer className="bg-[#050810] py-10">
+        <div className="mx-auto flex max-w-[1180px] flex-col gap-5 px-4 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
           <BrandLogo />
-          <p className="text-sm text-slate-400">CareerForge AI — your colorful AI career workspace.</p>
-          <div className="flex flex-wrap gap-5 text-sm font-bold text-slate-300">
+          <p className="m-0 text-xs text-slate-500">Career chat, resumes, interviews, images, jobs, and secure credits in one workspace.</p>
+          <div className="flex gap-5 text-xs font-bold text-slate-400">
             <a href="#features">Features</a>
-            <a href="#workflow">Workflow</a>
             <a href="#pricing">Plans</a>
-            <a href="#docs">Docs</a>
+            <Link to="/login">Login</Link>
           </div>
         </div>
       </footer>

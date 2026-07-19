@@ -61,12 +61,11 @@ The interview setup supports:
 - Student, early-career, mid-career, and senior candidates
 - Any profession or course, not only software roles
 - Optional company or college context
-- Optional job description or preparation notes
-- Existing analyzed resume selection
-- Direct PDF/DOCX upload and analysis from the interview setup
+- Job-description PDF, PNG, JPG, and WebP upload with visible extraction progress
+- Existing analyzed resume selection or direct resume upload
 - Hindi, Hinglish, English, automatic language matching, and strict interviewer mode
 
-The live room uses a real-person image tile with transform-only speaking motion. Candidate audio/video is sent directly from the browser to Gemini Live using an ephemeral token. The Spring Boot server does not proxy media frames, which keeps server CPU and bandwidth lower.
+The live room uses a full-frame interviewer video when `VITE_INTERVIEWER_IDLE_VIDEO_URL` and `VITE_INTERVIEWER_SPEAKING_VIDEO_URL` are configured. Its lightweight fallback keeps one professional portrait and applies subtle whole-frame motion; it does not paste duplicate jaw or mouth layers over the face. Output audio drives the speaking waveform and room accents. Candidate audio/video goes directly from the browser to Gemini Live through an ephemeral token, so the Spring Boot server does not proxy media frames. The client requests playback audio routing and exposes output-device selection when the browser supports it.
 
 Performance controls:
 
@@ -76,13 +75,16 @@ Performance controls:
 - Conversation and resume streams buffer small deltas before rerendering Markdown.
 - Search boxes use delayed requests instead of calling the backend for every keystroke.
 - The session refresh loop pauses when the tab is inactive and uses backoff when the backend is unreachable.
+- Text PDFs are extracted locally; scanned PDFs and images use the configured vision model only when needed.
 
 ## Responsive Layout
 
 - Desktop uses a collapsible history sidebar and fixed top bar.
-- Mobile uses a drawer sidebar and a compact top bar.
+- Mobile uses a drawer sidebar and compact top bar that stays visible above the visual viewport.
+- Public pages use the same fixed, compact navigation and reserve its height on every breakpoint.
+- Chat and interview composers stay in flow, so the keyboard resizes content without pushing actions off-screen.
 - Interview camera becomes picture-in-picture on mobile.
-- Composer controls account for safe-area insets and the visual viewport.
+- Safe-area and keyboard inset variables are derived from `window.visualViewport`.
 - Fixed workspaces use `minmax(0, 1fr)` and bounded dimensions to avoid horizontal overflow.
 
 ## API Service Boundary
@@ -102,18 +104,26 @@ For SSE features, the client performs one authorized fetch, parses named events,
 
 ## Screen Gallery
 
+![Public product workspace gallery](docs/screenshots/home-features.png)
+
+![Authenticated CareerForge walkthrough](docs/media/careerforge-walkthrough.gif)
+
 <table>
   <tr>
-    <td width="50%"><img alt="CareerForge home" src="docs/screenshots/home.png"></td>
+    <td width="50%"><img alt="CareerForge welcome workspace" src="docs/screenshots/welcome.png"></td>
+    <td width="50%"><img alt="CareerForge interview setup" src="docs/screenshots/interview-setup.png"></td>
+  </tr>
+  <tr>
+    <td align="center">Authenticated workspace chooser</td>
+    <td align="center">Interview setup with document context</td>
+  </tr>
+  <tr>
+    <td width="50%"><img alt="CareerForge mobile interview" src="docs/screenshots/interview-mobile.png"></td>
     <td width="50%"><img alt="CareerForge login" src="docs/screenshots/login.png"></td>
   </tr>
   <tr>
-    <td align="center">Public product entry</td>
+    <td align="center">Mobile viewport and fixed action footer</td>
     <td align="center">User authentication</td>
-  </tr>
-  <tr>
-    <td width="50%"><img alt="CareerForge admin login" src="docs/screenshots/admin-login.png"></td>
-    <td width="50%">Authenticated welcome and interview captures should be recorded against a running local backend so no fake session or secret appears in repository media.</td>
   </tr>
 </table>
 
@@ -162,4 +172,4 @@ Before committing screenshots or videos:
 4. Record authenticated flows against localhost or a dedicated staging environment.
 5. Review every frame before publishing.
 
-A real walkthrough video is intentionally not fabricated from static screens. Record it only when the backend, demo account, and provider integrations are available together.
+The committed walkthrough was captured from the running local frontend and backend after authentication, then reviewed to ensure credentials and secrets are not visible.

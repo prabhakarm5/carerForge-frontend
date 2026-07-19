@@ -79,16 +79,22 @@ function App() {
         const viewport = window.visualViewport;
         const syncViewportHeight = () => {
             const height = viewport?.height || window.innerHeight;
+            const offsetTop = viewport?.offsetTop || 0;
+            const keyboardInset = Math.max(0, window.innerHeight - height - offsetTop);
             document.documentElement.style.setProperty("--app-height", `${Math.round(height)}px`);
+            document.documentElement.style.setProperty("--app-top", `${Math.round(offsetTop)}px`);
+            document.documentElement.style.setProperty("--keyboard-inset", `${Math.round(keyboardInset)}px`);
         };
         syncViewportHeight();
         viewport?.addEventListener("resize", syncViewportHeight);
         viewport?.addEventListener("scroll", syncViewportHeight);
+        window.addEventListener("resize", syncViewportHeight);
         window.addEventListener("orientationchange", syncViewportHeight);
         return () => {
             document.removeEventListener("visibilitychange", handleVisibility);
             viewport?.removeEventListener("resize", syncViewportHeight);
             viewport?.removeEventListener("scroll", syncViewportHeight);
+            window.removeEventListener("resize", syncViewportHeight);
             window.removeEventListener("orientationchange", syncViewportHeight);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps

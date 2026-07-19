@@ -1476,3 +1476,35 @@
   .admin-system-summary { align-items: flex-start; flex-direction: column; }
   .admin-integration-grid { grid-template-columns: 1fr; }
 }
+/* Keep every admin surface inside the mobile viewport; wide tables scroll only inside their panel. */
+@media (max-width: 780px) {
+  .admin-section-stack,
+  .admin-panel,
+  .admin-table-panel,
+  .admin-chart-grid,
+  .admin-list-grid,
+  .admin-commerce-grid,
+  .admin-support-layout {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .admin-table-scroll {
+    max-width: 100%;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-section-heading {
+    min-width: 0;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-section-heading > *,
+  .admin-panel > header > div {
+    min-width: 0;
+    max-width: 100%;
+  }
+}

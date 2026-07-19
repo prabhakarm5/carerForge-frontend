@@ -52,22 +52,19 @@ function getPlanStyle(planRaw) {
 function useSmoothOpen(isOpen, durationMs = 180) {
   const [rendered, setRendered] = useState(isOpen);
   useEffect(() => {
-    let t;
-    if (isOpen) setRendered(true);
-    else t = setTimeout(() => setRendered(false), durationMs);
-    return () => clearTimeout(t);
+    const timer = window.setTimeout(() => setRendered(isOpen), isOpen ? 0 : durationMs);
+    return () => window.clearTimeout(timer);
   }, [isOpen, durationMs]);
   return rendered;
 }
 
 function Avatar({ user, size = 26 }) {
-  const [imgError, setImgError] = useState(false);
+  const [failedSrc, setFailedSrc] = useState(null);
   const imgSrc = user?.profileImage || null;
-  useEffect(() => { setImgError(false); }, [imgSrc]);
   const initials = user?.name
     ? user.name.trim().split(/\s+/).map((part) => part.match(/[A-Za-z0-9]/)?.[0]).filter(Boolean).join("").slice(0, 2).toUpperCase() || "U"
     : "U";
-  const showImage = imgSrc && !imgError;
+  const showImage = imgSrc && failedSrc !== imgSrc;
   return (
     <div style={{
       width: size, height: size, borderRadius: "50%", flexShrink: 0,
@@ -83,7 +80,7 @@ function Avatar({ user, size = 26 }) {
         <img
           src={imgSrc}
           alt={user?.name || "User"}
-          onError={() => setImgError(true)}
+          onError={() => setFailedSrc(imgSrc)}
           style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }}
         />
       ) : initials}
@@ -159,13 +156,12 @@ function ProfileDropdown({ user, wallet, open, onClose }) {
   const planStyle = getPlanStyle(wallet?.currentPlanName);
 
   useEffect(() => {
-    if (open) {
-      const raf = requestAnimationFrame(() => setVisible(true));
-      return () => cancelAnimationFrame(raf);
-    }
-    setVisible(false);
-    const t = setTimeout(() => setPanel("menu"), 180);
-    return () => clearTimeout(t);
+    const visibleTimer = window.setTimeout(() => setVisible(open), 0);
+    const panelTimer = open ? null : window.setTimeout(() => setPanel("menu"), 180);
+    return () => {
+      window.clearTimeout(visibleTimer);
+      if (panelTimer) window.clearTimeout(panelTimer);
+    };
   }, [open]);
 
   // NOTE: outside-click / outside-tap-to-close is handled one level up in
@@ -473,7 +469,7 @@ export default function Topbar({ setSidebarOpen, wallet, onRefreshWallet, wallet
         failCount = 0;
       } catch (err) {
         failCount = Math.min(failCount + 1, 5);
-        if (process.env.NODE_ENV !== "production") {
+        if (import.meta.env.DEV) {
           console.warn("[Topbar] wallet auto-refresh failed, backing off:", err);
         }
       } finally {
@@ -511,16 +507,16 @@ export default function Topbar({ setSidebarOpen, wallet, onRefreshWallet, wallet
   }, [onRefreshWallet, walletPollIntervalMs]);
 
   const headerStyle = {
-    position: "sticky", top: 0, zIndex: 40, flexShrink: 0,
+    position: "fixed", top: "var(--app-top, 0px)", left: "var(--dashboard-topbar-left, 0px)", right: 0, zIndex: 40, flexShrink: 0,
     height: TOPBAR_H, minHeight: TOPBAR_H,
-    width: "100%", boxSizing: "border-box",
+    boxSizing: "border-box",
     background: TOPBAR_BG,
     borderBottom: `1px solid ${BORDER}`,
     boxShadow: "0 2px 10px rgba(0,0,0,0.35)",
   };
 
   return (
-    <header style={headerStyle}>
+    <header className="dashboard-global-topbar" style={headerStyle}>
       <div style={{ height: TOPBAR_H, width: "100%", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 8px" }}>
         <IBtn onClick={() => setSidebarOpen(true)} className="lg:hidden" style={{ marginLeft: -2 }}>
           <Menu size={15} />
