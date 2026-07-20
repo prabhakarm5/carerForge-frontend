@@ -208,6 +208,7 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#060a12] text-white">
+      <style>{`@keyframes cfHomeReveal { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } } .cf-home-reveal { animation: cfHomeReveal .7s cubic-bezier(.16,1,.3,1) both; } .cf-home-reveal-delay { animation-delay: .12s; } @media (prefers-reduced-motion: reduce) { .cf-home-reveal, .cf-home-reveal-delay { animation: none; } }`}</style>
       <section className="relative flex min-h-[calc(100svh-88px)] max-h-[880px] items-end overflow-hidden border-b border-white/10">
         <img src="/images/career-hero-v2.png" alt="Professional preparing for a career interview" className="absolute inset-0 h-full w-full object-cover object-[64%_center] sm:object-center" />
         <div className="absolute inset-0 bg-black/40" />
@@ -217,11 +218,11 @@ export default function HomePage() {
             <div className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/30 bg-black/40 px-3 py-2 text-xs font-black text-cyan-200 backdrop-blur">
               <Sparkles size={15} /> AI career operating system
             </div>
-            <h1 className="mt-5 text-[42px] font-black leading-none text-white sm:text-6xl lg:text-[80px]">CareerForge AI</h1>
-            <p className="mt-5 max-w-2xl text-base leading-8 text-slate-200 sm:text-lg">
+            <h1 className="cf-home-reveal cf-home-reveal-delay mt-5 text-[42px] font-black leading-none text-white sm:text-6xl lg:text-[80px]">CareerForge AI</h1>
+            <p className="cf-home-reveal cf-home-reveal-delay mt-5 max-w-2xl text-base leading-8 text-slate-200 sm:text-lg">
               Prepare, create, practice, and apply from one connected workspace with durable chat memory, ATS resume tools, live interviews, image creation, current jobs, and a shared credit wallet.
             </p>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <div className="cf-home-reveal cf-home-reveal-delay mt-7 flex flex-col gap-3 sm:flex-row">
               <Link to="/register" className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-cyan-400 px-6 text-sm font-black text-[#031318] hover:bg-cyan-300">
                 Start with 100 free credits <Rocket size={18} />
               </Link>
@@ -307,10 +308,14 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-[1180px] flex-col gap-5 px-4 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
           <BrandLogo />
           <p className="m-0 text-xs text-slate-500">Career chat, resumes, interviews, images, jobs, and secure credits in one workspace.</p>
-          <div className="flex gap-5 text-xs font-bold text-slate-400">
+          <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-bold text-slate-400">
             <a href="#features">Features</a>
             <a href="#pricing">Plans</a>
-            <Link to="/login">Login</Link>
+            <Link to="/terms">Terms</Link>
+            <Link to="/privacy-policy">Privacy</Link>
+            <Link to="/payment-policy">Payments</Link>
+            <Link to="/delivery-policy">Delivery</Link>
+            <Link to="/contact">Support</Link>
           </div>
         </div>
       </footer>

@@ -3,6 +3,7 @@ import { API_BASE_URL } from "../config/api";
 
 import { logout, logoutAllDevices } from "../services/authService";
 import { tokenStorage } from "../utils/tokenStorage";
+import { runRefreshSingleFlight } from "../utils/refreshCoordinator";
 
 function normalizeUser(raw) {
   if (!raw) return null;
@@ -202,7 +203,10 @@ const useAuthStore = create((set, get) => ({
       }
 
       try {
-        const data = await requestRefreshToken();
+        const refreshResult = await runRefreshSingleFlight(requestRefreshToken);
+        const data = typeof refreshResult === "string"
+          ? { accessToken: refreshResult }
+          : refreshResult;
 
         const cachedUser = tokenStorage.getUser();
         const restoredUser = cachedUser && data.role

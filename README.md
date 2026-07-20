@@ -173,3 +173,8 @@ Before committing screenshots or videos:
 5. Review every frame before publishing.
 
 The committed walkthrough was captured from the running local frontend and backend after authentication, then reviewed to ensure credentials and secrets are not visible.
+
+
+## Production handoff
+
+Deployment variables, public payment-review pages, and the final session/OAuth checklist are documented in [docs/production-handoff.md](docs/production-handoff.md). Product screenshots and walkthrough media are indexed in [docs/README.md](docs/README.md).

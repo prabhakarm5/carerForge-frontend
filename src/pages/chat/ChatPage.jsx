@@ -415,6 +415,11 @@ function TableBlock({ header, rows }) {
 
 // ─── Rendered Message ────────────────────────────────────────────────────
 function RenderedMessage({ content, onOpenPanel, isStreaming = false }) {
+  // Streaming text stays intentionally lightweight. Parsing the whole growing answer
+  // on each chunk caused long answers to freeze the chat before the final rich render.
+  if (isStreaming) {
+    return <div className="assistant-streaming-text">{content}</div>;
+  }
   // Re-parse at most ~8x/sec while streaming; flush the exact final text
   // the instant streaming ends (delayMs becomes 0 → immediate).
   const normalizedContent = useMemo(() => normalizeMessageMarkup(content), [content]);
@@ -1522,6 +1527,7 @@ export default function ChatPage() {
         @keyframes msgIn { from{opacity:0;transform:translateY(10px) scale(0.985)} to{opacity:1;transform:translateY(0) scale(1)} }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes thinkingDot { 0%,70%,100%{opacity:.25;transform:translateY(0)} 35%{opacity:1;transform:translateY(-2px)} }
+        .assistant-streaming-text { white-space: pre-wrap; overflow-wrap: anywhere; color: #d3dbe8; font-size: 15px; line-height: 1.8; }
         .assistant-thinking { display:flex;align-items:center;gap:4px;width:max-content;margin-left:42px;padding:7px 10px;border:1px solid rgba(255,255,255,.07);border-radius:10px;background:rgba(255,255,255,.035);color:#94a3b8;font-size:12px; }
         .assistant-thinking i { width:4px;height:4px;border-radius:50%;background:#a78bfa;animation:thinkingDot 1.1s infinite; }
         .assistant-thinking i:nth-of-type(2){animation-delay:.14s}.assistant-thinking i:nth-of-type(3){animation-delay:.28s}
@@ -1568,6 +1574,7 @@ export default function ChatPage() {
           .chat-composer-input { min-height: 27px; max-height: 68px; padding: 2px 3px 4px; font-size: 14px; line-height: 1.42; }
           .chat-composer-toolbar { min-height: 29px; }
           .chat-composer-icon, .chat-composer-send { width: 29px; height: 29px; flex-basis: 29px; border-radius: 8px; }
+          .assistant-streaming-text { font-size: 13.5px; line-height: 1.62; }
           .assistant-rendered p, .assistant-rendered li { font-size: 13.5px !important; line-height: 1.62 !important; }
           .assistant-rendered h1 { font-size: 17px !important; margin: 10px 0 4px !important; }
           .assistant-rendered h2 { font-size: 15.5px !important; margin: 9px 0 4px !important; }

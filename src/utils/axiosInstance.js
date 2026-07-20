@@ -3,6 +3,7 @@ import { API_BASE_URL } from "../config/api";
 import useAuthStore from "../store/authStore";
 import { isForegroundActive, onForegroundActivity } from "./authActivity";
 import { notifyRechargeForError } from "./rechargeEvents";
+import { runRefreshSingleFlight } from "./refreshCoordinator";
 
 const axiosInstance = axios.create({
     baseURL: API_BASE_URL,
@@ -161,7 +162,7 @@ setTimeout(() => {
 // ✅ Ye function reactive (401 fallback) aur proactive (timer) dono
 // jagah se call hota hai — dono ek hi refresh-logic + cross-tab lock
 // share karte hain.
-async function silentRefresh() {
+async function performSilentRefresh() {
     if (refreshPending && Date.now() < nextRefreshAttemptAt) {
         const deferred = new Error("Token refresh is waiting for the next active request.");
         deferred.code = "REFRESH_DEFERRED";
@@ -226,6 +227,11 @@ async function silentRefresh() {
     } finally {
         isRefreshing = false;
     }
+}
+
+async function silentRefresh() {
+    const result = await runRefreshSingleFlight(performSilentRefresh);
+    return typeof result === "string" ? result : result?.accessToken;
 }
 
 export async function refreshAccessTokenOnDemand() {

@@ -54,6 +54,9 @@ import DeveloperDocumentation from "../document/DeveloperDocumentation";
 // ================= LEGAL PAGES =================
 import TermsAndConditions from "../shared/Termsandconditions";
 import PaymentPolicy from "../shared/Paymentpolicy";
+import PrivacyPolicy from "../shared/Privacypolicy";
+import ContactPage from "../shared/Contact";
+import DeliveryPolicy from "../shared/Deliverypolicy";
 
 // ================= 404 =================
 import NotFound from "../pages/NotFound";
@@ -353,6 +356,9 @@ export default function AppRoutes() {
                     ================================================================ */}
                 <Route path="/terms" element={<TermsAndConditions />} />
                 <Route path="/payment-policy" element={<PaymentPolicy />} />
+                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                <Route path="/contact" element={<ContactPage />} />
+                <Route path="/delivery-policy" element={<DeliveryPolicy />} />
 
                 {/* ================================================================
                     404 ‚CATCH-ALL
