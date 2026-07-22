@@ -164,7 +164,9 @@ export function startCheckout({
 
                     name: "CareerForge AI",
 
-                    description: "Wallet Recharge",
+                    description: "CareerForge AI Credits",
+
+                    image: `${window.location.origin}/favicon.svg`,
 
                     order_id: order.orderId,
 
@@ -178,7 +180,9 @@ export function startCheckout({
 
                     theme: {
 
-                        color: "#7c3aed",
+                        color: "#06b6d4",
+
+                        backdrop_color: "#050810",
 
                     },
 

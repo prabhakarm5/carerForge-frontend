@@ -7,7 +7,7 @@
 // Local development ke liye root folder mein .env:
 // VITE_API_BASE_URL=http://localhost:9092
 //
-// Production deploy ke time GitHub Actions secret se:
+// Production deploy ke time secure deployment environment se:
 // VITE_API_BASE_URL=https://your-backend-url.elasticbeanstalk.com
 //
 // IMPORTANT:
@@ -22,13 +22,16 @@ const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 // Ã¢Å“â€¦ Prod mode mein env missing hua to clear error milega
 if (!rawApiBaseUrl && import.meta.env.PROD) {
   throw new Error(
-    "VITE_API_BASE_URL missing hai. Production build ke liye GitHub Secret ya .env.production mein backend URL set karo."
+    "VITE_API_BASE_URL missing hai. Production build ke secure environment mein backend URL set karo."
   );
 }
 
 // Ã¢Å“â€¦ Final API base URL
 // Local fallback: http://localhost:9092
 // Last slash remove: https://api.com/ -> https://api.com
+if (rawApiBaseUrl && import.meta.env.PROD && !rawApiBaseUrl.startsWith("https://")) {
+  throw new Error("Production VITE_API_BASE_URL must use HTTPS.");
+}
 export const API_BASE_URL = (
   rawApiBaseUrl || "http://localhost:9092"
 ).replace(/\/+$/, "");
