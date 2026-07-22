@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   Eye,
@@ -22,6 +22,7 @@ const RESEND_COOLDOWN = 30;
 
 export default function AdminLoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const login = useAuthStore((state) => state.login);
 
   const [step, setStep] = useState("credentials"); // credentials | otp | granted
@@ -31,6 +32,10 @@ export default function AdminLoginPage() {
   const [cooldown, setCooldown] = useState(0);
   const otpRefs = useRef([]);
 
+  useEffect(() => {
+    const email = searchParams.get("email")?.trim();
+    if (email) setForm((current) => ({ ...current, email }));
+  }, [searchParams]);
   useEffect(() => {
     if (cooldown <= 0) return undefined;
     const id = setInterval(() => setCooldown((value) => value - 1), 1000);

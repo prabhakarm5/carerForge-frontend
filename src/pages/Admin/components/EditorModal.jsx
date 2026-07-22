@@ -1,4 +1,4 @@
-import { Check, Loader2, X } from "lucide-react";
+import { CalendarClock, Check, Gift, Loader2, Tag, UsersRound, X } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { saveAdminPlan, saveAdminPromo } from "../../../services/adminService";
@@ -61,15 +61,33 @@ function PlanFields({ form, set }) {
 
 function PromoFields({ form, set, plans }) {
   return <>
-    <div className="admin-form-grid"><label><span>Promo code</span><input required maxLength={32} value={form.code} onChange={(e) => set("code", e.target.value.toUpperCase())} /></label><label><span>Campaign title</span><input required maxLength={80} value={form.title} onChange={(e) => set("title", e.target.value)} /></label></div>
-    <label><span>Description shown to users</span><textarea maxLength={300} rows="3" value={form.description || ""} onChange={(e) => set("description", e.target.value)} /></label>
-    <div className="admin-form-grid"><label><span>Reward type</span><select value={form.rewardType} onChange={(e) => set("rewardType", e.target.value)}><option value="DISCOUNT">Checkout discount</option><option value="BONUS_TOKENS">Free token reward</option><option value="FREE_PLAN">Free plan reward</option></select></label><label><span>Who can claim</span><select value={form.audience} onChange={(e) => set("audience", e.target.value)}><option value="ALL_USERS">All users</option><option value="NEVER_RECHARGED">Never recharged</option><option value="SPECIFIC_USERS">Specific users</option></select></label></div>
-    {form.rewardType === "DISCOUNT" && <div className="admin-form-grid"><label><span>Discount %</span><input required min="1" max="90" type="number" value={form.discountPercent} onChange={(e) => set("discountPercent", e.target.value)} /></label><label><span>Bonus tokens after payment</span><input min="0" type="number" value={form.bonusTokens} onChange={(e) => set("bonusTokens", e.target.value)} /></label></div>}
-    {form.rewardType === "BONUS_TOKENS" && <label><span>Free tokens</span><input required min="1" type="number" value={form.bonusTokens} onChange={(e) => set("bonusTokens", e.target.value)} /></label>}
-    {form.rewardType === "FREE_PLAN" && <label><span>Plan granted immediately</span><select required value={form.rewardPlanId || ""} onChange={(e) => set("rewardPlanId", e.target.value)}><option value="">Select a plan</option>{plans.filter((plan) => plan.active !== false).map((plan) => <option key={plan.id} value={plan.id}>{plan.name} - {Number(plan.tokens || 0).toLocaleString()} tokens</option>)}</select></label>}
-    {form.audience === "SPECIFIC_USERS" && <label><span>Target user emails</span><textarea required rows="3" placeholder="user@example.com, another@example.com" value={form.targetUserEmails} onChange={(e) => set("targetUserEmails", e.target.value)} /><small>Separate emails with commas, spaces, or new lines.</small></label>}
-    <label><span>Maximum total claims</span><input min="0" type="number" value={form.maxTotalClaims} onChange={(e) => set("maxTotalClaims", e.target.value)} /><small>Use 0 for no campaign-wide limit. Each user can claim once.</small></label>
-    <div className="admin-form-grid"><label><span>Starts</span><input type="datetime-local" value={form.validFrom} onChange={(e) => set("validFrom", e.target.value)} /></label><label><span>Expires</span><input type="datetime-local" value={form.expiresAt} onChange={(e) => set("expiresAt", e.target.value)} /></label></div>
-    <label className="admin-toggle"><input type="checkbox" checked={form.active} onChange={(e) => set("active", e.target.checked)} /><span><Check size={13} /></span>Campaign enabled</label>
+    <PromoSection icon={Tag} title="Campaign details">
+      <div className="admin-form-grid"><label><span>Promo code</span><input required maxLength={32} placeholder="WELCOME25" value={form.code} onChange={(e) => set("code", e.target.value.toUpperCase())} /></label><label><span>Campaign title</span><input required maxLength={80} placeholder="New user welcome reward" value={form.title} onChange={(e) => set("title", e.target.value)} /></label></div>
+      <label><span>Description shown to users</span><textarea maxLength={300} rows="3" placeholder="Explain the reward in one clear sentence" value={form.description || ""} onChange={(e) => set("description", e.target.value)} /></label>
+    </PromoSection>
+
+    <PromoSection icon={Gift} title="Reward rules">
+      <div className="admin-form-grid"><label><span>Reward type</span><select value={form.rewardType} onChange={(e) => set("rewardType", e.target.value)}><option value="DISCOUNT">Checkout discount</option><option value="BONUS_TOKENS">Free token reward</option><option value="FREE_PLAN">Free plan reward</option></select></label><label><span>Who can claim</span><select value={form.audience} onChange={(e) => set("audience", e.target.value)}><option value="ALL_USERS">All users</option><option value="NEVER_RECHARGED">Never recharged</option><option value="SPECIFIC_USERS">Specific users</option></select></label></div>
+      {form.rewardType === "DISCOUNT" && <div className="admin-form-grid"><label><span>Discount %</span><input required min="1" max="90" type="number" value={form.discountPercent} onChange={(e) => set("discountPercent", e.target.value)} /></label><label><span>Bonus tokens after payment</span><input min="0" type="number" value={form.bonusTokens} onChange={(e) => set("bonusTokens", e.target.value)} /></label></div>}
+      {form.rewardType === "BONUS_TOKENS" && <label><span>Free tokens</span><input required min="1" type="number" value={form.bonusTokens} onChange={(e) => set("bonusTokens", e.target.value)} /></label>}
+      {form.rewardType === "FREE_PLAN" && <label><span>Plan granted immediately</span><select required value={form.rewardPlanId || ""} onChange={(e) => set("rewardPlanId", e.target.value)}><option value="">Select a plan</option>{plans.filter((plan) => plan.active !== false).map((plan) => <option key={plan.id} value={plan.id}>{plan.name} - {Number(plan.tokens || 0).toLocaleString()} tokens</option>)}</select></label>}
+    </PromoSection>
+
+    <PromoSection icon={UsersRound} title="Eligibility">
+      {form.audience === "SPECIFIC_USERS" && <label><span>Target user emails</span><textarea required rows="3" placeholder="user@example.com, another@example.com" value={form.targetUserEmails} onChange={(e) => set("targetUserEmails", e.target.value)} /><small>Separate emails with commas, spaces, or new lines.</small></label>}
+      <label><span>Maximum total claims</span><input min="0" type="number" value={form.maxTotalClaims} onChange={(e) => set("maxTotalClaims", e.target.value)} /><small>Use 0 for no campaign-wide limit. Each user can claim once.</small></label>
+    </PromoSection>
+
+    <PromoSection icon={CalendarClock} title="Schedule">
+      <div className="admin-form-grid"><label><span>Starts</span><input type="datetime-local" value={form.validFrom} onChange={(e) => set("validFrom", e.target.value)} /></label><label><span>Expires</span><input type="datetime-local" min={form.validFrom || undefined} value={form.expiresAt} onChange={(e) => set("expiresAt", e.target.value)} /></label></div>
+      <label className="admin-toggle"><input type="checkbox" checked={form.active} onChange={(e) => set("active", e.target.checked)} /><span><Check size={13} /></span>Campaign enabled</label>
+    </PromoSection>
   </>;
+}
+
+function PromoSection({ icon: Icon, title, children }) {
+  return <section className="admin-promo-section">
+    <div className="admin-promo-section-title"><Icon size={16} /><span>{title}</span></div>
+    {children}
+  </section>;
 }
