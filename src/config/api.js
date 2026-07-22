@@ -57,6 +57,7 @@ export const API = {
 
     // ADMIN
     ADMIN_LOGIN: "/api/auth/admin-login",
+    REVEAL_ADMIN_LOGIN_OTP: "/api/auth/admin-login-otp/reveal",
     VERIFY_ADMIN_LOGIN_OTP: "/api/auth/verify-admin-login-otp",
     RESEND_ADMIN_LOGIN_OTP: "/api/auth/resend-admin-login-otp",
 

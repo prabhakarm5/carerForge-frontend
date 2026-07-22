@@ -101,3 +101,10 @@ export async function resendAdminOtp(
     );
 
 }
+export async function revealAdminOtp(token) {
+    const response = await axiosInstance.get(
+        API_BASE_URL + API.AUTH.REVEAL_ADMIN_LOGIN_OTP,
+        { params: { token }, timeout: 10000 }
+    );
+    return response.data;
+}

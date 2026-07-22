@@ -11,9 +11,7 @@ import {
   Image as ImageIcon,
   MessageSquareText,
   Mic2,
-  Rocket,
   ShieldCheck,
-  Sparkles,
   WandSparkles,
   Zap,
 } from "lucide-react";
@@ -93,6 +91,11 @@ const workspaces = [
     route: "/jobs",
     points: ["Current job-provider results", "Role and location filters", "Direct apply workflow"],
   },
+];
+
+const interviewFirstWorkspaces = [
+  workspaces.find((workspace) => workspace.id === "interview"),
+  ...workspaces.filter((workspace) => workspace.id !== "interview"),
 ];
 
 const faq = [
@@ -216,18 +219,18 @@ export default function HomePage() {
         <div className="relative mx-auto w-full max-w-[1320px] px-4 pb-14 pt-28 sm:px-6 sm:pb-20 lg:px-8">
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/30 bg-black/40 px-3 py-2 text-xs font-black text-cyan-200 backdrop-blur">
-              <Sparkles size={15} /> AI career operating system
+              <Mic2 size={15} /> Interview-first AI career workspace
             </div>
-            <h1 className="cf-home-reveal cf-home-reveal-delay mt-5 text-[42px] font-black leading-none text-white sm:text-6xl lg:text-[80px]">CareerForge AI</h1>
-            <p className="cf-home-reveal cf-home-reveal-delay mt-5 max-w-2xl text-base leading-8 text-slate-200 sm:text-lg">
-              Prepare, create, practice, and apply from one connected workspace with durable chat memory, ATS resume tools, live interviews, image creation, current jobs, and a shared credit wallet.
+            <h1 className="cf-home-reveal cf-home-reveal-delay mt-5 max-w-full text-4xl font-black leading-[1.05] text-white sm:text-6xl lg:text-[80px]"><span className="block">CareerForge AI</span><span className="block">Interview Practice</span></h1>
+            <p className="cf-home-reveal cf-home-reveal-delay mt-5 max-w-2xl text-sm leading-6 text-slate-200 sm:text-lg sm:leading-8">
+              Run role-specific mock interviews with your resume and job description, answer by voice or text, and receive grounded follow-ups and evidence-based feedback. Resume, chat, jobs, and image tools stay connected around the same career journey.
             </p>
             <div className="cf-home-reveal cf-home-reveal-delay mt-7 flex flex-col gap-3 sm:flex-row">
-              <Link to="/register" className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-cyan-400 px-6 text-sm font-black text-[#031318] hover:bg-cyan-300">
-                Start with 100 free credits <Rocket size={18} />
+              <Link to="/register?next=%2Finterview" className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-cyan-400 px-6 text-sm font-black text-[#031318] hover:bg-cyan-300">
+                Start a mock interview <Mic2 size={18} />
               </Link>
               <a href="#features" className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-white/25 bg-black/35 px-6 text-sm font-black text-white backdrop-blur hover:bg-black/55">
-                Explore workspaces <ArrowRight size={18} />
+                Explore every workspace <ArrowRight size={18} />
               </a>
             </div>
           </div>
@@ -236,7 +239,7 @@ export default function HomePage() {
 
       <section className="bg-[#0b111b]">
         <div className="mx-auto grid max-w-[1220px] grid-cols-2 border-x border-white/10 sm:grid-cols-4">
-          {[["100", "Free starting credits"], ["5", "Connected AI workspaces"], ["1", "Shared secure wallet"], ["24/7", "History and access"]].map(([value, label], index) => (
+          {[["2", "Voice and written modes"], ["3", "Resume, role, and job context"], ["2", "Hindi and English"], ["1", "Actionable scorecard"]].map(([value, label], index) => (
             <div key={label} className={`px-4 py-5 ${index < 3 ? "border-r border-white/10" : ""} ${index < 2 ? "max-sm:border-b" : ""}`}>
               <strong className="block text-2xl font-black text-white">{value}</strong>
               <span className="mt-1 block text-xs text-slate-500">{label}</span>
@@ -247,11 +250,11 @@ export default function HomePage() {
 
       <section id="features" className="px-4 pb-6 pt-16 sm:px-6 sm:pt-20 lg:px-8">
         <div className="mx-auto max-w-[1220px]">
-          <SectionHeading eyebrow="Product workspaces" title="Everything new is visible before you sign in." text="These are verified screens from the running product, not generic illustrations." />
+          <SectionHeading eyebrow="Interview first" title="Walk into the real interview after practising the hard version." text="Start with a resume-aware interview room, then use the connected resume, chat, jobs, and image workspaces when you need them." />
         </div>
       </section>
 
-      {workspaces.map((workspace, index) => <ProductBand key={workspace.id} workspace={workspace} index={index} />)}
+      {interviewFirstWorkspaces.map((workspace, index) => <ProductBand key={workspace.id} workspace={workspace} index={index} />)}
 
       <section className="border-t border-white/10 bg-[#0a0f18] py-16 sm:py-20">
         <div className="mx-auto max-w-[1180px] px-4 sm:px-6 lg:px-8">
@@ -296,10 +299,10 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-[1180px] flex-col items-start justify-between gap-6 px-4 sm:px-6 lg:flex-row lg:items-center lg:px-8">
           <div>
             <p className="text-xs font-black uppercase">Ready when you are</p>
-            <h2 className="mt-2 text-3xl font-black sm:text-4xl">Build your next career move in CareerForge AI.</h2>
+            <h2 className="mt-2 text-3xl font-black sm:text-4xl">Practise the interview. Improve the evidence. Earn the offer.</h2>
           </div>
-          <Link to="/register" className="inline-flex h-12 shrink-0 items-center gap-2 rounded-lg bg-[#06101a] px-6 text-sm font-black text-white">
-            Create free account <ArrowRight size={18} />
+          <Link to="/register?next=%2Finterview" className="inline-flex h-12 shrink-0 items-center gap-2 rounded-lg bg-[#06101a] px-6 text-sm font-black text-white">
+            Start interview practice <ArrowRight size={18} />
           </Link>
         </div>
       </section>

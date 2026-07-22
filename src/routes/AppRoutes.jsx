@@ -5,39 +5,20 @@ import { Navigate, Routes, Route, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 // ================= PUBLIC PAGES =================
-import HomePage from "../pages/Home/HomePage";
-import LoginPage from "../pages/Login/LoginPage";
-import RegisterPage from "../pages/Register/RegisterPage";
 
 // ================= EMAIL VERIFICATION PAGES =================
-import VerificationPendingPage from "../pages/Verification/VerificationPendingPage";
-import VerifyEmailPage from "../pages/Verification/VerifyEmailPage";
-import VerificationSuccessPage from "../pages/Verification/VerificationSuccessPage";
-import VerificationFailedPage from "../pages/Verification/VerificationFailedPage";
 
 // ================= PASSWORD RESET PAGES =================
-import ForgotPasswordPage from "../pages/Auth/ForgotPasswordPage";
-import VerifyResetOtpPage from "../pages/Auth/VerifyResetOtpPage";
-import ResetPasswordPage from "../pages/Auth/ResetPasswordPage";
-import OAuthSuccessPage from "../pages/Auth/OAuthSuccessPage";
 
 // ================= DASHBOARD / USER PAGES =================
 // ? Actual path: src/pages/chat/ChatPage.jsx
 // Cloudflare/Linux case-sensitive hai, isliye "chat" lowercase rakha hai.
-import ChatPage from "../pages/chat/ChatPage";
 
-import ProfilePage from "../pages/Profile/ProfilePage";
-import DashboardPage from "../pages/Dashboard/DashboardPage";
-import ImageGeneratorPage from "../pages/ImageGeneratorPage";
-import SettingsPage from "../pages/Settings/SettingsPage";
 
 // ? Actual path: src/pages/Wallet/walletPage.jsx
 // Isliye "walletPage" lowercase w ke saath rakha hai.
-import WalletPage from "../pages/Wallet/walletPage";
 
 // ================= PAYMENT PAGES =================
-import PaymentSuccessPage from "../pages/Payment/PaymentSuccessPage";
-import PaymentFailedPage from "../pages/Payment/PaymentFailedPage";
 
 // ================= LAYOUTS / ROUTE GUARD =================
 import ProtectedRoute from "./ProtectedRoute";
@@ -48,19 +29,38 @@ import useAuthStore from "../store/authStore";
 import { trackPageView } from "../services/telemetryService";
 
 // ================= DOCUMENTATION PAGES =================
-import UserDocumentation from "../document/UserDocumentation";
-import DeveloperDocumentation from "../document/DeveloperDocumentation";
 
 // ================= LEGAL PAGES =================
-import TermsAndConditions from "../shared/Termsandconditions";
-import PaymentPolicy from "../shared/Paymentpolicy";
-import PrivacyPolicy from "../shared/Privacypolicy";
-import ContactPage from "../shared/Contact";
-import DeliveryPolicy from "../shared/Deliverypolicy";
 
 // ================= 404 =================
-import NotFound from "../pages/NotFound";
 
+const HomePage = lazy(() => import("../pages/Home/HomePage"));
+const LoginPage = lazy(() => import("../pages/Login/LoginPage"));
+const RegisterPage = lazy(() => import("../pages/Register/RegisterPage"));
+const VerificationPendingPage = lazy(() => import("../pages/Verification/VerificationPendingPage"));
+const VerifyEmailPage = lazy(() => import("../pages/Verification/VerifyEmailPage"));
+const VerificationSuccessPage = lazy(() => import("../pages/Verification/VerificationSuccessPage"));
+const VerificationFailedPage = lazy(() => import("../pages/Verification/VerificationFailedPage"));
+const ForgotPasswordPage = lazy(() => import("../pages/Auth/ForgotPasswordPage"));
+const VerifyResetOtpPage = lazy(() => import("../pages/Auth/VerifyResetOtpPage"));
+const ResetPasswordPage = lazy(() => import("../pages/Auth/ResetPasswordPage"));
+const OAuthSuccessPage = lazy(() => import("../pages/Auth/OAuthSuccessPage"));
+const ChatPage = lazy(() => import("../pages/chat/ChatPage"));
+const ProfilePage = lazy(() => import("../pages/Profile/ProfilePage"));
+const DashboardPage = lazy(() => import("../pages/Dashboard/DashboardPage"));
+const ImageGeneratorPage = lazy(() => import("../pages/ImageGeneratorPage"));
+const SettingsPage = lazy(() => import("../pages/Settings/SettingsPage"));
+const WalletPage = lazy(() => import("../pages/Wallet/walletPage"));
+const PaymentSuccessPage = lazy(() => import("../pages/Payment/PaymentSuccessPage"));
+const PaymentFailedPage = lazy(() => import("../pages/Payment/PaymentFailedPage"));
+const UserDocumentation = lazy(() => import("../document/UserDocumentation"));
+const DeveloperDocumentation = lazy(() => import("../document/DeveloperDocumentation"));
+const TermsAndConditions = lazy(() => import("../shared/Termsandconditions"));
+const PaymentPolicy = lazy(() => import("../shared/Paymentpolicy"));
+const PrivacyPolicy = lazy(() => import("../shared/Privacypolicy"));
+const ContactPage = lazy(() => import("../shared/Contact"));
+const DeliveryPolicy = lazy(() => import("../shared/Deliverypolicy"));
+const NotFound = lazy(() => import("../pages/NotFound"));
 const WelcomePage = lazy(() => import("../pages/Welcome/WelcomePage"));
 const ResumeAIPage = lazy(() => import("../pages/ResumeAI/ResumeAIPage"));
 const CoverLetterPage = lazy(() => import("../pages/CoverLetter/CoverLetterPage"));
@@ -68,6 +68,7 @@ const InterviewPage = lazy(() => import("../pages/Interview/InterviewPage"));
 const JobsPage = lazy(() => import("../pages/Jobs/JobsPage"));
 const PromosPage = lazy(() => import("../pages/Promos/PromosPage"));
 const AdminLoginPage = lazy(() => import("../pages/Admin/AdminLoginPage"));
+const AdminOtpRevealPage = lazy(() => import("../pages/Admin/AdminOtpRevealPage"));
 const AdminLayout = lazy(() => import("../pages/Admin/AdminLayout"));
 const AdminOverviewPage = lazy(() => import("../pages/Admin/pages/AdminOverviewPage"));
 const AdminRequestsPage = lazy(() => import("../pages/Admin/pages/AdminRequestsPage"));
@@ -112,6 +113,7 @@ const ROUTE_TITLES = {
     "/reset-password": "Reset Password",
     "/oauth/success": "Signing You In",
     "/admin/login": "Admin Sign In",
+    "/admin/otp": "Admin Login Code",
     "/admin/dashboard": "Admin Dashboard",
     "/admin/requests": "Request History",
     "/admin/users": "User Management",
@@ -196,6 +198,7 @@ export default function AppRoutes() {
             <AutoPageTitle />
             <PageTelemetry />
 
+            <Suspense fallback={<RouteLoading label="Loading page..." fullPage />}>
             <Routes>
                 {/* ================================================================
                     PUBLIC ROUTES
@@ -231,6 +234,13 @@ export default function AppRoutes() {
                 </Route>
 
                 <Route
+                    path="/admin/otp"
+                    element={
+                        <Suspense fallback={<RouteLoading label="Opening secure code..." fullPage />}>
+                            <AdminOtpRevealPage />
+                        </Suspense>
+                    }
+                />                <Route
                     path="/admin/login"
                     element={
                         <Suspense fallback={<RouteLoading label="Loading secure sign in..." admin />}>
@@ -369,6 +379,7 @@ export default function AppRoutes() {
                     ================================================================ */}
                 <Route path="*" element={<NotFound />} />
             </Routes>
+            </Suspense>
         </>
     );
 }
