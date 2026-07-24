@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, ArrowDown, ArrowUp, CircleGauge, Clock3, Cpu, Gauge, Radio, Users } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { EmptyState, formatBytes, formatUptime, MetricList, RequestTable, SectionHeader } from "./AdminUi";
@@ -9,16 +9,30 @@ import { API } from "../../../config/api";
 const DEFAULT_INTERVAL_MS = 2000;
 const PULSE_DURATION_MS = 650;
 const MAX_BACKOFF_MS = 20000;
+// Kitne recent samples ki trail rakhni hai sparklines ke liye (24 * 2s ≈ 48s history).
+const HISTORY_LENGTH = 24;
 
-// ⚠️ Confirm this path matches your actual route (pattern seen elsewhere in
-// this app is API.<DOMAIN>.<ACTION>, e.g. API.PLANS.GET_ALL). If your admin
-// overview endpoint is named differently, this is the only line to change —
-// everything below (polling, gauges, deltas) works off whatever it returns.
-const fetchOverview = () => axiosInstance.get(API.ADMIN.OVERVIEW).then((res) => res.data);
+// ✅ FIX: pehle yaha API.ADMIN.OVERVIEW tha jo config/api.js mein exist hi nahi
+// karta — isliye axios ko `undefined` mil raha tha aur woh baseURL ke root "/"
+// pe hit kar raha tha (isliye "/" baar baar request list mein dikh raha tha).
+// Actual key ADMIN.MONITORING hai → "/api/admin/monitoring/overview".
+const fetchOverview = () => axiosInstance.get(API.ADMIN.MONITORING).then((res) => res.data);
 
 /** Full, exact number — 12,483 stays 12,483, never rounds to "12k". */
 function formatExact(value) {
   return Number(value || 0).toLocaleString();
+}
+
+/** Ek fresh sample se sirf woh fields nikalta hai jo trails/sparklines chahiye. */
+function samplePoint(fresh) {
+  const heapPct = Math.min(100, (fresh.system.usedHeapBytes * 100) / Math.max(1, fresh.system.maxHeapBytes));
+  return {
+    cpu: fresh.system.processCpuPercent,
+    sysCpu: fresh.system.systemCpuPercent,
+    heapPct,
+    requests: fresh.traffic.requests,
+    latency: fresh.traffic.averageLatencyMs,
+  };
 }
 
 const TONE = {
@@ -29,37 +43,67 @@ const TONE = {
   emerald: { text: "text-emerald-300", bg: "bg-emerald-400/10", ring: "ring-emerald-400/60", hex: "#34d399" },
 };
 
+/** Respects the OS-level "reduce motion" setting — skips easing on gauges/rings for those users. */
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = () => setReduced(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return reduced;
+}
+
 /**
- * Polls `fetcher` on an interval, tracks the previous snapshot (so we can
- * compute live deltas like "+42 requests since last update"), and backs
- * off automatically on repeated failures instead of hammering a dead route.
- * Falls back to the `initialOverview` prop for the very first paint so
- * there's no loading flash.
+ * Polls `fetcher` on an interval, tracks the previous snapshot (for live
+ * deltas like "+42 requests since last update") and a short rolling
+ * `history` trail (for sparklines), and backs off automatically on repeated
+ * failures instead of hammering a dead route.
+ *
+ * Two correctness/perf guards that matter under real usage:
+ * - `fetcherRef` keeps the latest `onRefresh` without putting it in the
+ *   effect's dependency array, so an inline function passed by the parent
+ *   (a new identity on every parent render) never tears down and restarts
+ *   the polling loop — only a real `intervalMs` change does that.
+ * - `inFlight` skips a tick if the previous request hasn't resolved yet, so
+ *   a slow response + a tab visibility flip can't spin up two concurrent
+ *   polling chains that silently double the request rate.
  */
 function useLiveOverview(initialOverview, customFetcher, intervalMs) {
-  const fetcher = customFetcher || fetchOverview;
   const [data, setData] = useState(initialOverview);
+  const [history, setHistory] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(() => Date.now());
   const [connectionState, setConnectionState] = useState("live"); // "live" | "retrying"
   const [pulse, setPulse] = useState(false);
   const previousRef = useRef(null);
   const pulseTimer = useRef(null);
 
+  const fetcherRef = useRef(customFetcher || fetchOverview);
+  useEffect(() => {
+    fetcherRef.current = customFetcher || fetchOverview;
+  }, [customFetcher]);
+
   useEffect(() => {
     let cancelled = false;
     let timeoutId;
     let failCount = 0;
+    let inFlight = false;
 
     const schedule = (delay) => { timeoutId = setTimeout(tick, delay); };
 
     const tick = async () => {
-      if (cancelled) return;
+      if (cancelled || inFlight) return;
       if (document.hidden) { schedule(intervalMs); return; }
+      inFlight = true;
       try {
-        const fresh = await fetcher();
+        const fresh = await fetcherRef.current();
         if (cancelled || !fresh) return;
         failCount = 0;
         setData((prev) => { previousRef.current = prev; return fresh; });
+        setHistory((h) => [...h, samplePoint(fresh)].slice(-HISTORY_LENGTH));
         setLastUpdated(Date.now());
         setConnectionState("live");
         setPulse(true);
@@ -71,11 +115,15 @@ function useLiveOverview(initialOverview, customFetcher, intervalMs) {
         failCount += 1;
         setConnectionState("retrying");
         schedule(Math.min(intervalMs * 2 ** failCount, MAX_BACKOFF_MS));
+      } finally {
+        inFlight = false;
       }
     };
 
     schedule(intervalMs);
-    const onVisibilityChange = () => { if (!document.hidden) { clearTimeout(timeoutId); tick(); } };
+    const onVisibilityChange = () => {
+      if (!document.hidden && !inFlight) { clearTimeout(timeoutId); tick(); }
+    };
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
@@ -84,9 +132,9 @@ function useLiveOverview(initialOverview, customFetcher, intervalMs) {
       clearTimeout(pulseTimer.current);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [fetcher, intervalMs]);
+  }, [intervalMs]);
 
-  return { data, previous: previousRef.current, lastUpdated, connectionState, pulse };
+  return { data, previous: previousRef.current, history, lastUpdated, connectionState, pulse };
 }
 
 /** Ticks its own "Xs ago" label every second without re-rendering the whole panel. */
@@ -116,7 +164,8 @@ const LiveBadge = memo(function LiveBadge({ lastUpdated, connectionState }) {
 });
 
 /** Animated ring gauge — the stroke smoothly eases to the new % every time `value` changes. */
-function RadialGauge({ value, tone = "cyan", size = 44, stroke = 4.5 }) {
+const RadialGauge = memo(function RadialGauge({ value, tone = "cyan", size = 44, stroke = 4.5 }) {
+  const reducedMotion = usePrefersReducedMotion();
   const t = TONE[tone] || TONE.cyan;
   const clamped = Math.min(100, Math.max(0, Number(value) || 0));
   const radius = (size - stroke) / 2;
@@ -131,7 +180,7 @@ function RadialGauge({ value, tone = "cyan", size = 44, stroke = 4.5 }) {
           cx={size / 2} cy={size / 2} r={radius} fill="none"
           stroke={t.hex} strokeWidth={stroke} strokeLinecap="round"
           strokeDasharray={circumference} strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 700ms cubic-bezier(0.22,1,0.36,1)" }}
+          style={{ transition: reducedMotion ? "none" : "stroke-dashoffset 700ms cubic-bezier(0.22,1,0.36,1)" }}
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
@@ -139,10 +188,10 @@ function RadialGauge({ value, tone = "cyan", size = 44, stroke = 4.5 }) {
       </div>
     </div>
   );
-}
+});
 
 /** Small up/down pill showing exactly how much a number moved since the last poll. */
-function TrendPill({ current, previous }) {
+const TrendPill = memo(function TrendPill({ current, previous }) {
   if (previous == null) return null;
   const delta = current - previous;
   if (delta === 0) return null;
@@ -152,12 +201,37 @@ function TrendPill({ current, previous }) {
       {up ? <ArrowUp size={9} /> : <ArrowDown size={9} />}{formatExact(Math.abs(delta))}
     </span>
   );
-}
+});
 
-function StatCard({ icon: Icon, tone = "cyan", label, value, hint, pulse, gaugeValue, trendCurrent, trendPrevious }) {
+/** Tiny inline trend trace (last ~48s) — plain SVG, no chart library, so it stays cheap at 2s cadence. */
+const Sparkline = memo(function Sparkline({ points, tone = "cyan", width = 60, height = 20 }) {
+  const t = TONE[tone] || TONE.cyan;
+  if (!points || points.length < 2) return <div style={{ width, height }} aria-hidden="true" />;
+  const max = Math.max(...points);
+  const min = Math.min(...points);
+  const range = Math.max(max - min, 1);
+  const step = width / (points.length - 1);
+  const path = points
+    .map((p, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${(height - ((p - min) / range) * height).toFixed(1)}`)
+    .join(" ");
+  return (
+    <svg width={width} height={height} className="overflow-visible" aria-hidden="true">
+      <path d={path} fill="none" stroke={t.hex} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" opacity={0.85} />
+    </svg>
+  );
+});
+
+const StatCard = memo(function StatCard({ icon: Icon, tone = "cyan", label, value, hint, pulse, gaugeValue, trendCurrent, trendPrevious, trail }) {
   const t = TONE[tone] || TONE.cyan;
   return (
-    <div className={`relative overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-b from-white/[0.04] to-white/[0.01] p-3 ring-2 transition-shadow duration-500 sm:p-4 ${pulse ? t.ring : "ring-transparent"}`}>
+    <div
+      className={`relative overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-b from-white/[0.04] to-white/[0.01] p-3 ring-2 transition-[box-shadow,transform] duration-300 hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 sm:p-4 ${pulse ? t.ring : "ring-transparent"}`}
+    >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-3 top-0 h-px opacity-40"
+        style={{ background: `linear-gradient(to right, transparent, ${t.hex}, transparent)` }}
+      />
       <div className="flex items-center justify-between gap-2">
         {gaugeValue != null
           ? <RadialGauge value={gaugeValue} tone={tone} />
@@ -165,19 +239,28 @@ function StatCard({ icon: Icon, tone = "cyan", label, value, hint, pulse, gaugeV
         <TrendPill current={trendCurrent} previous={trendPrevious} />
       </div>
       <p className="mt-2.5 truncate text-[10px] font-medium text-slate-400 sm:mt-3 sm:text-[11px]">{label}</p>
-      <p className="mt-0.5 truncate font-mono text-lg font-extrabold tabular-nums text-white sm:text-2xl">{value}</p>
+      <div className="mt-0.5 flex items-end justify-between gap-2">
+        <p className="truncate font-mono text-lg font-extrabold tabular-nums text-white sm:text-2xl">{value}</p>
+        {trail && trail.length > 1 && <Sparkline points={trail} tone={tone} />}
+      </div>
       <p className="mt-1 truncate text-[9px] text-slate-500 sm:text-[10px]">{hint}</p>
     </div>
   );
-}
+});
 
 const panelClass = "min-w-0 rounded-2xl border border-white/5 bg-[#0b0f1a] p-4 sm:p-5";
-const pulseRing = (active) => `ring-2 transition-shadow duration-500 ${active ? "ring-cyan-400/60" : "ring-transparent"}`;
+const pulseRing = (active) => `ring-2 transition-shadow duration-500 motion-reduce:transition-none ${active ? "ring-cyan-400/60" : "ring-transparent"}`;
 
 export function OverviewPanel({ overview, onRefresh, refreshInterval = DEFAULT_INTERVAL_MS }) {
-  const { data, previous, lastUpdated, connectionState, pulse } = useLiveOverview(overview, onRefresh, refreshInterval);
-  const heapPct = Math.min(100, data.system.usedHeapBytes * 100 / Math.max(1, data.system.maxHeapBytes));
+  const { data, previous, history, lastUpdated, connectionState, pulse } = useLiveOverview(overview, onRefresh, refreshInterval);
+
+  const heapPct = useMemo(
+    () => Math.min(100, (data.system.usedHeapBytes * 100) / Math.max(1, data.system.maxHeapBytes)),
+    [data.system.usedHeapBytes, data.system.maxHeapBytes]
+  );
   const requestDelta = previous ? data.traffic.requests - previous.traffic.requests : null;
+  const requestTrail = useMemo(() => history.map((h) => h.requests), [history]);
+  const latencyTrail = useMemo(() => history.map((h) => h.latency), [history]);
 
   return <div className="flex flex-col gap-4 sm:gap-6">
     <div className="flex flex-wrap items-start justify-between gap-3 sm:items-center">
@@ -185,22 +268,22 @@ export function OverviewPanel({ overview, onRefresh, refreshInterval = DEFAULT_I
       <LiveBadge lastUpdated={lastUpdated} connectionState={connectionState} />
     </div>
 
-    <section className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+    <section className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4 xl:gap-4">
       <StatCard icon={Users} tone="cyan" pulse={pulse}
         label="Total users" value={formatExact(data.users.total)} hint={`+${formatExact(data.users.joinedLastSevenDays)} this week`}
         trendCurrent={data.users.total} trendPrevious={previous?.users.total} />
       <StatCard icon={Activity} tone="violet" pulse={pulse}
         label="API requests" value={formatExact(data.traffic.requests)}
         hint={requestDelta ? `+${formatExact(requestDelta)} since last update` : `${formatExact(data.traffic.activeUsers)} active users`}
-        trendCurrent={data.traffic.requests} trendPrevious={previous?.traffic.requests} />
+        trendCurrent={data.traffic.requests} trendPrevious={previous?.traffic.requests} trail={requestTrail} />
       <StatCard icon={Clock3} tone={data.traffic.averageLatencyMs > 500 ? "rose" : "amber"} pulse={pulse}
         label="Average latency" value={`${data.traffic.averageLatencyMs} ms`} hint={`${data.traffic.errorRate}% error rate`}
-        trendCurrent={data.traffic.averageLatencyMs} trendPrevious={previous?.traffic.averageLatencyMs} />
+        trendCurrent={data.traffic.averageLatencyMs} trendPrevious={previous?.traffic.averageLatencyMs} trail={latencyTrail} />
       <StatCard icon={Cpu} tone="rose" pulse={pulse} gaugeValue={data.system.processCpuPercent}
         label="Process CPU" value={`${data.system.processCpuPercent}%`} hint={`${formatExact(data.system.liveThreads)} live threads`} />
     </section>
 
-    <section className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-[1.7fr_1fr]">
+    <section className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-2 xl:grid-cols-[1.7fr_1fr]">
       <div className={`${panelClass} flex flex-col ${pulseRing(pulse)}`}>
         <header className="mb-3.5 flex items-start justify-between gap-2.5 text-slate-500">
           <div><h3 className="m-0 text-sm font-semibold text-slate-50">Request volume</h3><p className="m-0 mt-0.5 text-[11px] text-slate-400">Hourly traffic over the retained monitoring window</p></div>
@@ -222,11 +305,11 @@ export function OverviewPanel({ overview, onRefresh, refreshInterval = DEFAULT_I
         </header>
 
         <div className="mb-3.5 grid grid-cols-2 gap-2.5">
-          <div className={`flex flex-col items-center gap-1.5 rounded-xl border border-white/5 bg-white/[0.02] py-3 transition-shadow duration-500 ${pulse ? "shadow-[0_0_0_1px_rgba(34,211,238,0.35)]" : ""}`}>
+          <div className={`flex flex-col items-center gap-1.5 rounded-xl border border-white/5 bg-white/[0.02] py-3 transition-shadow duration-500 motion-reduce:transition-none ${pulse ? "shadow-[0_0_0_1px_rgba(34,211,238,0.35)]" : ""}`}>
             <RadialGauge value={data.system.systemCpuPercent} tone="cyan" size={48} />
             <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">System CPU</span>
           </div>
-          <div className={`flex flex-col items-center gap-1.5 rounded-xl border border-white/5 bg-white/[0.02] py-3 transition-shadow duration-500 ${pulse ? "shadow-[0_0_0_1px_rgba(167,139,250,0.35)]" : ""}`}>
+          <div className={`flex flex-col items-center gap-1.5 rounded-xl border border-white/5 bg-white/[0.02] py-3 transition-shadow duration-500 motion-reduce:transition-none ${pulse ? "shadow-[0_0_0_1px_rgba(167,139,250,0.35)]" : ""}`}>
             <RadialGauge value={heapPct} tone="violet" size={48} />
             <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">Heap used</span>
           </div>
@@ -247,7 +330,7 @@ export function OverviewPanel({ overview, onRefresh, refreshInterval = DEFAULT_I
       </div>
     </section>
 
-    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <MetricList title="Top API endpoints" items={data.topEndpoints} color="cyan" />
       <MetricList title="Top product pages" items={data.topPages} color="violet" />
       <MetricList title="Traffic locations" items={data.countries} color="amber" />
@@ -288,7 +371,10 @@ export function OverviewPanel({ overview, onRefresh, refreshInterval = DEFAULT_I
 
 export function TrafficPanel({ overview, onRefresh, refreshInterval = DEFAULT_INTERVAL_MS }) {
   const { data, lastUpdated, connectionState, pulse } = useLiveOverview(overview, onRefresh, refreshInterval);
-  const statusData = Object.entries(data.statusCodes || {}).map(([name, value]) => ({ name, value }));
+  const statusData = useMemo(
+    () => Object.entries(data.statusCodes || {}).map(([name, value]) => ({ name, value })),
+    [data.statusCodes]
+  );
 
   return <div className="flex flex-col gap-4 sm:gap-6">
     <div className="flex flex-wrap items-start justify-between gap-3 sm:items-center">
@@ -296,7 +382,7 @@ export function TrafficPanel({ overview, onRefresh, refreshInterval = DEFAULT_IN
       <LiveBadge lastUpdated={lastUpdated} connectionState={connectionState} />
     </div>
 
-    <section className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-[1.7fr_1fr]">
+    <section className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-2 xl:grid-cols-[1.7fr_1fr]">
       <div className={`${panelClass} flex flex-col ${pulseRing(pulse)}`}>
         <header className="mb-3.5 flex items-start justify-between gap-2.5 text-slate-500">
           <div><h3 className="m-0 text-sm font-semibold text-slate-50">HTTP outcomes</h3><p className="m-0 mt-0.5 text-[11px] text-slate-400">Success, redirect and failure groups</p></div>
